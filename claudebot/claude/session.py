@@ -90,6 +90,7 @@ class ClaudeSession:
         self._is_new = is_new
         self._ever_started = False
         self._interrupted = False
+        self._stopping = False
         self._proc: asyncio.subprocess.Process | None = None
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=_QUEUE_MAX)
         self._reader_task: asyncio.Task | None = None
@@ -117,12 +118,14 @@ class ClaudeSession:
         """Send one user turn and return Claude's reply. Serialized per chat."""
         async with self._lock:
             if not self.is_alive:
+                self._stopping = False
                 await self._respawn()
             try:
                 return await self._run_turn_bounded(text, on_event, image_paths)
             except (_ChildGone, BrokenPipeError, ConnectionResetError):
-                if self._interrupted:
+                if self._interrupted or self._stopping:
                     self._interrupted = False
+                    self._stopping = False
                     return TurnResult(text="🛑 Stopped.", session_id=self.session_id)
                 log.warning("chat %s: child gone, respawning with --resume", self.chat_id)
                 await self._respawn()
@@ -158,6 +161,7 @@ class ClaudeSession:
 
     async def stop(self) -> None:
         """Kill the child but keep ``session_id`` so the next ask() resumes."""
+        self._stopping = True
         await self._kill_proc()
 
     async def interrupt(self) -> None:

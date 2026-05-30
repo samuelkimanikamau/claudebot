@@ -1,6 +1,8 @@
 """Unit tests for ClaudeSession argument building and child-env hygiene (no spawn)."""
 
-from claudebot.claude.session import SAFETY_PREAMBLE, ClaudeSession
+import asyncio
+
+from claudebot.claude.session import SAFETY_PREAMBLE, ClaudeSession, TurnResult, _ChildGone
 from claudebot.core.config import Settings
 
 
@@ -43,3 +45,46 @@ def test_build_args_resume_uses_resume_flag():
 def test_turn_timeout_setting_present():
     assert _settings().turn_timeout == 1800
     assert _settings(turn_timeout=0).turn_timeout == 0
+
+
+async def test_stop_during_inflight_turn_does_not_respawn(monkeypatch):
+    class FakeProc:
+        returncode = None
+
+    session = ClaudeSession(1, _settings(), session_id="sess-123", is_new=False)
+    session._proc = FakeProc()
+    turn_started = asyncio.Event()
+    stop_called = asyncio.Event()
+    respawns = 0
+    calls = 0
+
+    async def fake_run_turn_bounded(text, on_event, image_paths):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            turn_started.set()
+            await stop_called.wait()
+            raise _ChildGone()
+        return TurnResult(text="respawned", session_id=session.session_id)
+
+    async def fake_kill_proc():
+        session._proc = None
+        stop_called.set()
+
+    async def fake_respawn():
+        nonlocal respawns
+        respawns += 1
+        session._proc = FakeProc()
+
+    monkeypatch.setattr(session, "_run_turn_bounded", fake_run_turn_bounded)
+    monkeypatch.setattr(session, "_kill_proc", fake_kill_proc)
+    monkeypatch.setattr(session, "_respawn", fake_respawn)
+
+    ask_task = asyncio.create_task(session.ask("hello"))
+    await asyncio.wait_for(turn_started.wait(), timeout=1)
+    await session.stop()
+
+    result = await asyncio.wait_for(ask_task, timeout=1)
+
+    assert result.text == "🛑 Stopped."
+    assert respawns == 0
