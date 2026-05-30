@@ -88,3 +88,35 @@ async def test_stop_during_inflight_turn_does_not_respawn(monkeypatch):
 
     assert result.text == "🛑 Stopped."
     assert respawns == 0
+
+
+async def test_unexpected_child_exit_during_turn_does_not_retry_user_message(monkeypatch):
+    class FakeProc:
+        returncode = None
+
+    session = ClaudeSession(1, _settings(), session_id="sess-123", is_new=False)
+    session._proc = FakeProc()
+    respawns = 0
+    calls = 0
+
+    async def fake_run_turn_bounded(text, on_event, image_paths):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise _ChildGone()
+        return TurnResult(text="retried duplicate turn", session_id=session.session_id)
+
+    async def fake_respawn():
+        nonlocal respawns
+        respawns += 1
+        session._proc = FakeProc()
+
+    monkeypatch.setattr(session, "_run_turn_bounded", fake_run_turn_bounded)
+    monkeypatch.setattr(session, "_respawn", fake_respawn)
+
+    result = await session.ask("deploy the app")
+
+    assert result.is_error is True
+    assert "Claude process stopped" in result.text
+    assert calls == 1
+    assert respawns == 0

@@ -41,6 +41,8 @@ WorkingDirectory={Path.home()}
 ExecStart={argv}
 Restart=always
 RestartSec=5
+TimeoutStopSec=10
+KillMode=control-group
 StandardOutput=journal
 StandardError=journal
 

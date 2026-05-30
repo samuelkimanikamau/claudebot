@@ -127,9 +127,19 @@ class ClaudeSession:
                     self._interrupted = False
                     self._stopping = False
                     return TurnResult(text="🛑 Stopped.", session_id=self.session_id)
-                log.warning("chat %s: child gone, respawning with --resume", self.chat_id)
-                await self._respawn()
-                return await self._run_turn_bounded(text, on_event, image_paths)
+                log.warning(
+                    "chat %s: child gone during turn; not retrying user message",
+                    self.chat_id,
+                )
+                return TurnResult(
+                    text=(
+                        "⚠️ Claude process stopped before finishing. I did not retry "
+                        "automatically to avoid duplicating side effects — send the "
+                        "message again if you want me to rerun it."
+                    ),
+                    session_id=self.session_id,
+                    is_error=True,
+                )
             finally:
                 self.last_activity = time.monotonic()
 
