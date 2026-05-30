@@ -27,7 +27,7 @@ from telegram.ext import (
 )
 
 from claudebot.claude.manager import SessionManager
-from claudebot.core.config import Settings
+from claudebot.core.config import PERMISSION_MODES, Settings
 from claudebot.core.logging import get_logger
 from claudebot.core.paths import ensure_state_dir, state_dir
 from claudebot.telegram.auth import is_allowed
@@ -38,20 +38,163 @@ log = get_logger("claudebot.telegram")
 _WELCOME = (
     "👋 I'm your Claude Code bot. Send me anything and I'll run it through the real "
     "Claude Code on this machine.\n\n"
-    "Commands:\n"
+    "Core commands:\n"
     "/new — fresh conversation\n"
     "/status — session info\n"
     "/cd <path> — change working directory\n"
-    "/stop — abort the current reply\n"
+    "/stop — abort the current reply\n\n"
+    "Runtime controls:\n"
+    "/model <default|opus|sonnet|haiku|id>\n"
+    "/effort <default|low|medium|high|xhigh|max>\n"
+    "/mode <bypassPermissions|acceptEdits|default|plan|dontAsk>\n"
+    "/config — show current runtime config\n"
+    "/tools — show tool allow/deny lists\n"
+    "/cost <on|off> — show/hide cost footer\n"
+    "/timeout <seconds> — turn timeout, 0 disables\n"
+    "/idle <seconds> — idle child eviction, 0 disables\n"
 )
 
 _COMMANDS = [
     ("new", "Start a fresh Claude conversation"),
     ("status", "Show session info"),
+    ("config", "Show runtime model, effort, mode, timeouts"),
+    ("model", "Set model: default, opus, sonnet, haiku, or model id"),
+    ("effort", "Set thinking effort: default, low, medium, high, xhigh, max"),
+    ("mode", "Set permission mode for new turns"),
+    ("tools", "Show allowed/disallowed Claude tools"),
+    ("cost", "Toggle cost footer: on/off"),
+    ("timeout", "Set per-turn timeout seconds; 0 disables"),
+    ("idle", "Set idle eviction seconds; 0 disables"),
     ("cd", "Change working directory"),
     ("stop", "Abort the current reply"),
     ("help", "What this bot can do"),
 ]
+
+_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+_SESSION_RESTART_OPTIONS = {"model", "effort", "mode"}
+_CLEAR_VALUES = {"default", "auto", "none", "off"}
+_TRUE_VALUES = {"1", "true", "yes", "y", "on", "enable", "enabled"}
+_FALSE_VALUES = {"0", "false", "no", "n", "off", "disable", "disabled"}
+
+
+def _format_config(settings: Settings) -> str:
+    return (
+        "claudebot config\n"
+        f"• model: {settings.model or 'default'}\n"
+        f"• effort: {settings.effort or 'default'}\n"
+        f"• permission mode: {settings.permission_mode}\n"
+        f"• working dir: {settings.working_dir}\n"
+        f"• stream partials: {'on' if settings.stream_partials else 'off'}\n"
+        f"• markdown: {'on' if settings.markdown else 'off'}\n"
+        f"• show cost: {'on' if settings.show_cost else 'off'}\n"
+        f"• idle timeout: {settings.idle_timeout}s\n"
+        f"• turn timeout: {settings.turn_timeout}s"
+    )
+
+
+def _format_tools(settings: Settings) -> str:
+    allowed = ", ".join(settings.allowed_tools) if settings.allowed_tools else "all default tools"
+    disallowed = ", ".join(settings.disallowed_tools) if settings.disallowed_tools else "none"
+    return "claudebot tools\n" f"• allowed: {allowed}\n" f"• disallowed: {disallowed}"
+
+
+def _apply_runtime_setting(
+    settings: Settings, key: str, args: list[str]
+) -> tuple[bool, bool, str]:
+    """Apply a runtime setting from a Telegram command.
+
+    Returns ``(changed, requires_fresh_session, user_message)``.
+    """
+    value = " ".join(args).strip()
+    if not value:
+        return False, False, _usage_for(key, settings)
+
+    normalized = value.lower()
+    if key == "model":
+        if normalized in _CLEAR_VALUES:
+            settings.model = None
+            return True, True, "✅ model reset to default."
+        if any(ch.isspace() for ch in value):
+            return False, False, "Usage: /model <default|opus|sonnet|haiku|model-id>"
+        settings.model = value
+        return True, True, f"✅ model set to {value}."
+
+    if key == "effort":
+        if normalized in _CLEAR_VALUES:
+            settings.effort = None
+            return True, True, "✅ effort reset to default."
+        if normalized not in _EFFORTS:
+            return False, False, "Allowed effort values: default, low, medium, high, xhigh, max."
+        settings.effort = normalized
+        return True, True, f"✅ effort set to {normalized}."
+
+    if key == "mode":
+        if value not in PERMISSION_MODES:
+            allowed = ", ".join(PERMISSION_MODES)
+            return False, False, f"Allowed permission modes: {allowed}."
+        settings.permission_mode = value
+        return True, True, f"✅ permission mode set to {value}."
+
+    if key == "cost":
+        flag = _parse_bool(normalized)
+        if flag is None:
+            return False, False, "Usage: /cost <on|off>"
+        settings.show_cost = flag
+        return True, False, f"✅ cost footer {'on' if flag else 'off'}."
+
+    if key == "timeout":
+        seconds = _parse_seconds(value)
+        if seconds is None:
+            return False, False, "Usage: /timeout <seconds>  (0 disables)"
+        settings.turn_timeout = seconds
+        return True, False, f"✅ turn timeout set to {seconds}s."
+
+    if key == "idle":
+        seconds = _parse_seconds(value)
+        if seconds is None:
+            return False, False, "Usage: /idle <seconds>  (0 disables)"
+        settings.idle_timeout = seconds
+        return True, False, f"✅ idle timeout set to {seconds}s."
+
+    return False, False, f"Unknown setting: {key}"
+
+
+def _usage_for(key: str, settings: Settings) -> str:
+    current = {
+        "model": settings.model or "default",
+        "effort": settings.effort or "default",
+        "mode": settings.permission_mode,
+        "cost": "on" if settings.show_cost else "off",
+        "timeout": f"{settings.turn_timeout}s",
+        "idle": f"{settings.idle_timeout}s",
+    }.get(key, "unknown")
+    examples = {
+        "model": "Usage: /model <default|opus|sonnet|haiku|model-id>",
+        "effort": "Usage: /effort <default|low|medium|high|xhigh|max>",
+        "mode": f"Usage: /mode <{'|'.join(PERMISSION_MODES)}>",
+        "cost": "Usage: /cost <on|off>",
+        "timeout": "Usage: /timeout <seconds>  (0 disables)",
+        "idle": "Usage: /idle <seconds>  (0 disables)",
+    }.get(key, f"Usage: /{key} <value>")
+    return f"Current {key}: {current}\n{examples}"
+
+
+def _parse_bool(value: str) -> bool | None:
+    if value in _TRUE_VALUES:
+        return True
+    if value in _FALSE_VALUES:
+        return False
+    return None
+
+
+def _parse_seconds(value: str) -> int | None:
+    try:
+        seconds = int(value)
+    except ValueError:
+        return None
+    if seconds < 0:
+        return None
+    return seconds
 
 
 class TelegramBridge:
@@ -78,6 +221,14 @@ class TelegramBridge:
         app.add_handler(CommandHandler(["start", "help"], self._cmd_start, filters=private))
         app.add_handler(CommandHandler("new", self._cmd_new, filters=private))
         app.add_handler(CommandHandler("status", self._cmd_status, filters=private))
+        app.add_handler(CommandHandler("config", self._cmd_config, filters=private))
+        app.add_handler(CommandHandler("model", self._cmd_model, filters=private))
+        app.add_handler(CommandHandler("effort", self._cmd_effort, filters=private))
+        app.add_handler(CommandHandler("mode", self._cmd_mode, filters=private))
+        app.add_handler(CommandHandler("tools", self._cmd_tools, filters=private))
+        app.add_handler(CommandHandler("cost", self._cmd_cost, filters=private))
+        app.add_handler(CommandHandler("timeout", self._cmd_timeout, filters=private))
+        app.add_handler(CommandHandler("idle", self._cmd_idle, filters=private))
         app.add_handler(CommandHandler("cd", self._cmd_cd, filters=private))
         app.add_handler(CommandHandler("stop", self._cmd_stop, filters=private))
         app.add_handler(MessageHandler(filters.PHOTO & private, self._on_photo))
@@ -160,8 +311,56 @@ class TelegramBridge:
             f"• state: {alive}\n"
             f"• working dir: {session.working_dir}\n"
             f"• model: {self.settings.model or 'default'}\n"
-            f"• permission mode: {self.settings.permission_mode}"
+            f"• effort: {self.settings.effort or 'default'}\n"
+            f"• permission mode: {self.settings.permission_mode}\n"
+            f"• turn timeout: {self.settings.turn_timeout}s"
         )
+
+    async def _cmd_config(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._guard(update):
+            return
+        await update.effective_message.reply_text(_format_config(self.settings))
+
+    async def _cmd_tools(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._guard(update):
+            return
+        await update.effective_message.reply_text(_format_tools(self.settings))
+
+    async def _cmd_model(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._cmd_runtime(update, ctx, "model")
+
+    async def _cmd_effort(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._cmd_runtime(update, ctx, "effort")
+
+    async def _cmd_mode(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._cmd_runtime(update, ctx, "mode")
+
+    async def _cmd_cost(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._cmd_runtime(update, ctx, "cost")
+
+    async def _cmd_timeout(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._cmd_runtime(update, ctx, "timeout")
+
+    async def _cmd_idle(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._cmd_runtime(update, ctx, "idle")
+
+    async def _cmd_runtime(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, key: str) -> None:
+        if not await self._guard(update):
+            return
+        args = list(ctx.args or [])
+        if key in _SESSION_RESTART_OPTIONS and args:
+            session = await self.manager.get(update.effective_chat.id)
+            if session.busy:
+                await update.effective_message.reply_text(
+                    "⏳ Still working on your previous message — send /stop before changing "
+                    f"/{key}."
+                )
+                return
+        changed, needs_fresh_session, message = _apply_runtime_setting(self.settings, key, args)
+        if changed and needs_fresh_session:
+            await self.manager.reset(update.effective_chat.id)
+            message += "\n🆕 Started a fresh conversation with the new setting."
+        await update.effective_message.reply_text(message)
 
     async def _cmd_cd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._guard(update):
