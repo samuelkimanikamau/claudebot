@@ -14,6 +14,14 @@ Telegram  ──►  claudebot (your code)  ──►  claude -p --output-format
    └──────────────  reply / stream  ◄─────────────┘
 ```
 
+> **Single-user by design.** claudebot is a *personal* assistant: it runs on **your**
+> Claude subscription and gives whoever you allowlist full tool access (including
+> `Bash`) on the host machine. Keep it to your **own** Telegram ID. Adding other
+> people means (1) sharing your subscription — account sharing, against Anthropic's
+> terms and a ban risk — and (2) handing them a shell on your computer. It is **not**
+> a public bot, SaaS, or multi-tenant service; that would need per-user credentials,
+> quotas, and isolation, not one shared subscription.
+
 ## Why this design
 
 There are three ways to put Claude Code behind Telegram. `claudebot` picks the
