@@ -31,6 +31,8 @@ class SystemdService(ServiceManager):
 Description=claudebot — Telegram bot driving Claude Code
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=8
 
 [Service]
 Type=simple
@@ -39,8 +41,6 @@ WorkingDirectory={Path.home()}
 ExecStart={argv}
 Restart=always
 RestartSec=5
-StartLimitIntervalSec=300
-StartLimitBurst=8
 StandardOutput=journal
 StandardError=journal
 
