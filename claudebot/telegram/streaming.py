@@ -79,7 +79,7 @@ class Streamer:
             txt = events.assistant_text(event)
             if txt:
                 self._buffer += txt
-                await self._preview(force=True)
+                await self._preview()  # respect edit_interval; finalize() lays down the truth
 
     async def _preview(self, force: bool = False) -> None:
         now = time.monotonic()

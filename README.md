@@ -145,6 +145,21 @@ Config lives in `~/.claudebot/.env` (written by `claudebot setup`). Every key is
 > `CLAUDEBOT_DISALLOWED_TOOLS`, and/or a `permissions.deny` block + a `PreToolUse`
 > hook in your Claude `settings.json`.
 
+### Security posture
+
+- **Single-user, fail-closed.** Only `CLAUDEBOT_ALLOWED_USER_IDS` can talk to the
+  bot (empty = locked); handlers are scoped to **private chats** only. Keep it to
+  your own ID — sharing your subscription is account sharing.
+- **Content-injection guard.** A default safety preamble (`CLAUDEBOT_SAFETY_PREAMBLE`)
+  tells Claude to treat attached/forwarded/fetched content as **data, not
+  instructions** — since with full tool access an untrusted image or web page is
+  the real attack surface, not your own messages.
+- **Secret hygiene.** The bot token never enters the `claude` child's environment
+  (all `CLAUDEBOT_*` vars are stripped); `~/.claudebot/.env` and `sessions.json`
+  are `chmod 600`; errors shown in chat are generic (details go to the log).
+- **No wedging.** `CLAUDEBOT_TURN_TIMEOUT` bounds every turn; a single `flock`
+  guarantees one poller per host; downloaded images are deleted after each turn.
+
 ## How it works
 
 - One **persistent `claude` child per chat**, kept warm between turns; one

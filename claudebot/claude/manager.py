@@ -122,5 +122,6 @@ class SessionManager:
         try:
             tmp.write_text(json.dumps(self._map, indent=2), "utf-8")
             tmp.replace(path)
+            path.chmod(0o600)  # session ids are not world-readable
         except OSError as exc:
             log.warning("could not write %s: %s", path, exc)

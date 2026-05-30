@@ -84,6 +84,16 @@ class Settings(BaseSettings):
         description="Kill a chat's idle claude child after N seconds (0 = never). "
         "The session_id is kept, so the next message resumes context.",
     )
+    turn_timeout: int = Field(
+        default=1800,
+        description="Abort a turn that produces no result after N seconds (0 = no limit). "
+        "Prevents a hung tool from wedging the chat; the session resets and resumes.",
+    )
+    safety_preamble: bool = Field(
+        default=True,
+        description="Append a system-prompt instruction to treat attached/forwarded/"
+        "fetched content as untrusted data, not instructions (content-injection guard).",
+    )
     show_cost: bool = Field(
         default=False, description="Append a token/cost footer after each reply."
     )

@@ -104,7 +104,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     except urllib.error.HTTPError as exc:
         check("Telegram token valid", False, f"HTTP {exc.code} — bad token?")
     except Exception as exc:  # noqa: BLE001
-        check("Telegram reachable", False, str(exc))
+        check("Telegram reachable", False, str(exc).replace(token, "***"))
 
     print(
         "\n\033[32mAll good.\033[0m  Start with:  claudebot run"
@@ -177,7 +177,10 @@ def cmd_update(args: argparse.Namespace) -> int:
     if (src / ".git").is_dir():
         if not args.no_pull:
             print("• git pull --ff-only")
-            subprocess.run(["git", "-C", str(src), "pull", "--ff-only"])
+            pull = subprocess.run(["git", "-C", str(src), "pull", "--ff-only"])
+            if pull.returncode != 0:
+                print("✗ git pull failed — aborting (resolve it, or use --no-pull).")
+                return pull.returncode
     else:
         print("• (not a git repo — installing the local files as-is)")
 
