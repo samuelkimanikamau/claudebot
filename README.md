@@ -122,7 +122,15 @@ Just message it. Slash commands:
 |---|---|
 | `/start`, `/help` | Welcome + usage |
 | `/new` | Start a fresh Claude conversation (drops context) |
-| `/status` | Session id, working dir, model, alive/idle |
+| `/status` | Session id, working dir, model, effort, alive/idle |
+| `/config` | Show runtime model, effort, mode, cost, and timeouts |
+| `/model <default|opus|sonnet|haiku|id>` | Set the Claude model and start a fresh session |
+| `/effort <default|low|medium|high|xhigh|max>` | Set thinking effort and start a fresh session |
+| `/mode <bypassPermissions|acceptEdits|default|plan|dontAsk>` | Set permission mode and start a fresh session |
+| `/tools` | Show allowed/disallowed Claude tools |
+| `/cost <on|off>` | Toggle cost footer after replies |
+| `/timeout <seconds>` | Set per-turn timeout (`0` disables) |
+| `/idle <seconds>` | Set idle child eviction timeout (`0` disables) |
 | `/cd <path>` | Switch the working directory (starts a fresh session there) |
 | `/stop` | (best-effort) ignore the current turn |
 
