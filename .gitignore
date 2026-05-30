@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Secrets & local state (NEVER commit a bot token)
+.env
+*.env
+!.env.example
+sessions.json
+logs/
+
+# OS
+.DS_Store
+
+# Legacy "bot fleet" approach (the official-plugin + tmux design) — kept on disk
+# as prior art, but not part of this repo.
+/fleet/
+/docs/architecture.md
+/docs/MIGRATION.md

@@ -1,0 +1,164 @@
+# claudebot
+
+**An always-on Telegram bot that drives the real Claude Code on your subscription.**
+
+`claudebot` is a thin, self-hosted Telegram front-end for the genuine `claude`
+binary. It talks to Claude Code over its headless `stream-json` protocol on your
+logged-in Pro/Max subscription — **no API key, no Claude Agent SDK, no official
+plugin required.** Your bot owns the Telegram side completely; Claude Code itself
+does the thinking.
+
+```
+Telegram  ──►  claudebot (your code)  ──►  claude -p --output-format stream-json
+   ▲                                              │  (real binary, your subscription)
+   └──────────────  reply / stream  ◄─────────────┘
+```
+
+## Why this design
+
+There are three ways to put Claude Code behind Telegram. `claudebot` picks the
+one that owns the conversation loop and keeps you on the supported path:
+
+| Approach | Real binary? | No API key? | You own Telegram? | Notes |
+|---|---|---|---|---|
+| **Headless `stream-json` (this repo)** | ✅ | ✅ | ✅ totally | Drives `claude -p` directly; the SDK's own transport, called on the binary. |
+| Official `telegram@claude-plugins-official` plugin | ✅ | ✅ | ❌ fixed UX | Great, but you're a peripheral on Anthropic's session loop. |
+| Claude Agent SDK (`claude-agent-sdk`) | ⚠️ via SDK | ✅ | ✅ | This is the SDK you said you didn't want. |
+| PTY / TUI scraping | ✅ | ✅ | ✅ | Brittle ANSI parsing. Rejected. |
+
+## Is this allowed?
+
+**Yes — with one bright line.** Anthropic's "no third-party harness" rule is a
+*credential-scope* rule: it forbids feeding your subscription **OAuth token** to
+any inference client that is **not** Claude Code (the Agent SDK, Cline, Cursor,
+raw API calls, an LLM gateway). `claudebot` never touches the token — it only
+pipes text into the genuine `claude` process and reads JSON back, so the token
+stays inside Claude Code, exactly as designed. Anthropic actively supports this
+path: `claude -p`/`--output-format stream-json` on a subscription is documented,
+`claude setup-token` mints a subscription token for scripts, and (from 2026-06-15)
+`claude -p` usage draws on a dedicated subscription Agent-SDK credit.
+
+**Stay on the right side of it:**
+- **Single user.** Gate the bot to *your own* Telegram ID (the setup wizard does
+  this). Don't let other people prompt through your subscription — that's account
+  sharing.
+- **Never extract the token** from the keychain / `~/.claude/.credentials.json`
+  to make your own API calls. Let the binary own its auth.
+- **Don't hammer it** 24/7 in a tight loop. Normal interactive-scale chat is fine.
+
+> This is policy, not law — Anthropic can tighten it, and channels/headless are
+> still evolving. Use your own judgement.
+
+## Requirements
+
+- **Claude Code** installed and logged in: `claude auth login` (Pro/Max/Team/Enterprise).
+  Verify with `claude auth status` → `loggedIn: true`.
+- **Python 3.10+**.
+- A **Telegram bot token** from [@BotFather](https://t.me/BotFather).
+- Your **Telegram numeric user ID** from [@userinfobot](https://t.me/userinfobot).
+
+## Install
+
+### One-liner (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/samuelkimanikamau/claudebot/main/scripts/install.sh | bash
+```
+
+The installer creates an isolated venv at `~/.claudebot/venv`, links `claudebot`
+into `~/.local/bin`, then runs the setup wizard and offers to install the
+always-on service.
+
+### From source
+
+```bash
+git clone https://github.com/samuelkimanikamau/claudebot.git
+cd claudebot
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e .
+claudebot setup          # interactive wizard, writes ~/.claudebot/.env
+claudebot doctor         # verify everything is wired
+claudebot run            # start in the foreground (Ctrl-C to stop)
+```
+
+## Always-on
+
+```bash
+claudebot service install   # systemd --user (Linux) or launchd (macOS)
+claudebot service status
+claudebot service logs
+```
+
+On Linux the unit is `Restart=always`; run `loginctl enable-linger $USER` once so
+it survives logout/reboot (the installer reminds you). On macOS it's a launchd
+LaunchAgent with `KeepAlive` + `RunAtLoad`.
+
+## Updating
+
+```bash
+claudebot update                # git pull (if a repo) + reinstall + restart the service
+claudebot update --no-restart   # reinstall only (apply later)
+claudebot update --no-pull      # reinstall local changes without pulling
+```
+
+`update` installs into the **service's** environment — not whichever venv you ran
+it from — so new dependencies land where the bot actually runs. If you only
+edited code (an editable install picks it up live) and added no dependencies,
+`claudebot service restart` alone is enough.
+
+## Talking to the bot
+
+Just message it. Slash commands:
+
+| Command | Action |
+|---|---|
+| `/start`, `/help` | Welcome + usage |
+| `/new` | Start a fresh Claude conversation (drops context) |
+| `/status` | Session id, working dir, model, alive/idle |
+| `/cd <path>` | Switch the working directory (starts a fresh session there) |
+| `/stop` | (best-effort) ignore the current turn |
+
+Send a **photo** and Claude will read it. Replies **stream** in live, render
+Claude's Markdown as Telegram formatting (bold, code, tables → monospace), and
+chunk past Telegram's 4096-char limit. Set `CLAUDEBOT_MARKDOWN=false` for raw
+plain text.
+
+## Configuration
+
+Config lives in `~/.claudebot/.env` (written by `claudebot setup`). Every key is
+`CLAUDEBOT_<UPPER_SNAKE>` and can also come from the environment. See
+[`.env.example`](.env.example). Highlights:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `CLAUDEBOT_TELEGRAM_BOT_TOKEN` | — | BotFather token (**required**) |
+| `CLAUDEBOT_ALLOWED_USER_IDS` | *(empty = locked)* | CSV of Telegram user IDs allowed in |
+| `CLAUDEBOT_WORKING_DIR` | `$HOME` | Where Claude runs |
+| `CLAUDEBOT_MODEL` | *(Claude default)* | `opus` / `sonnet` / full name |
+| `CLAUDEBOT_PERMISSION_MODE` | `bypassPermissions` | `bypassPermissions` never blocks; `acceptEdits` is safer |
+| `CLAUDEBOT_EFFORT` | — | `low`…`max` |
+| `CLAUDEBOT_IDLE_TIMEOUT` | `3600` | Kill an idle child after N s (context resumes on next message) |
+
+> ⚠️ `bypassPermissions` lets Claude run any tool (including `Bash`) without
+> asking. That's the right default for an unattended bot on a machine you trust,
+> but treat the bot like a root shell. Constrain it with `CLAUDEBOT_WORKING_DIR`,
+> `CLAUDEBOT_DISALLOWED_TOOLS`, and/or a `permissions.deny` block + a `PreToolUse`
+> hook in your Claude `settings.json`.
+
+## How it works
+
+- One **persistent `claude` child per chat**, kept warm between turns; one
+  Telegram poller fans messages out to the right child (one `getUpdates`
+  consumer per token — never run two).
+- Each user message is written to the child's stdin as a `stream-json` user
+  envelope; events are read off stdout until the turn's `result`.
+- `session_id`s are saved to `~/.claudebot/sessions.json`, so a restart resumes
+  every chat with `--resume`. Idle children are evicted and respawned on demand.
+- The child is launched with `ANTHROPIC_API_KEY` stripped from its environment,
+  forcing the subscription/OAuth path.
+
+See [`docs/`](docs/) and the module docstrings for the gory details.
+
+## License
+
+MIT.

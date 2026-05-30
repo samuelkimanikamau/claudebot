@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "claudebot"
+version = "0.1.0"
+description = "Always-on Telegram bot that drives the real Claude Code binary on your subscription — no API key, no Agent SDK."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Samuel Kimani", email = "samuel@ve.ke" }]
+keywords = ["claude", "claude-code", "telegram", "bot", "assistant", "agent"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Environment :: Console",
+  "Topic :: Communications :: Chat",
+]
+dependencies = [
+  "python-telegram-bot[rate-limiter]>=22.0",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "telegramify-markdown>=0.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6"]
+
+[project.scripts]
+claudebot = "claudebot.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/samuelkimanikamau/claudebot"
+Issues = "https://github.com/samuelkimanikamau/claudebot/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["claudebot"]
+
+[tool.hatch.build.targets.sdist]
+include = ["claudebot", "scripts", "README.md", "CLAUDE.md", "LICENSE"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
