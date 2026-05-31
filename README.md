@@ -132,12 +132,18 @@ Just message it. Slash commands:
 | `/timeout <seconds>` | Set per-turn timeout (`0` disables) |
 | `/idle <seconds>` | Set idle child eviction timeout (`0` disables) |
 | `/cd <path>` | Switch the working directory (starts a fresh session there) |
-| `/stop` | (best-effort) ignore the current turn |
+| `/retry` | Resend your last message |
+| `/stop` | Abort the current turn (kills the child; context resumes next message) |
 
-Send a **photo** and Claude will read it. Replies **stream** in live, render
-Claude's Markdown as Telegram formatting (bold, code, tables → monospace), and
-chunk past Telegram's 4096-char limit. Set `CLAUDEBOT_MARKDOWN=false` for raw
-plain text.
+Send a **photo or a document** (PDF, code, logs, …) and Claude will read it.
+Replies **stream** in live — head-first into stable message blocks that are
+upgraded to Telegram formatting (bold, code, tables → monospace) **in place**, so
+what you watched stream is never replaced or reordered; long replies chunk past
+the 4096-char limit. Set `CLAUDEBOT_MARKDOWN=false` for raw plain text.
+
+Runtime tweaks set in chat (`/model`, `/timeout`, `/cost`, …) are **saved
+per-chat** and survive restarts. `/model`, `/effort`, `/mode`, and `/cd` start a
+fresh conversation (they say so when you run them).
 
 ## Configuration
 

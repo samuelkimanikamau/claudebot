@@ -39,10 +39,12 @@ log = get_logger("claudebot.telegram")
 _WELCOME = (
     "👋 I'm your Claude Code bot. Send me anything and I'll run it through the real "
     "Claude Code on this machine.\n\n"
+    "Send text, a photo, or a document and I'll act on it.\n\n"
     "Core commands:\n"
     "/new — fresh conversation\n"
     "/status — session info\n"
     "/cd <path> — change working directory\n"
+    "/retry — resend your last message\n"
     "/stop — abort the current reply\n\n"
     "Runtime controls:\n"
     "/model <default|opus|sonnet|haiku|id>\n"
@@ -67,6 +69,7 @@ _COMMANDS = [
     ("timeout", "Set per-turn timeout seconds; 0 disables"),
     ("idle", "Set idle eviction seconds; 0 disables"),
     ("cd", "Change working directory"),
+    ("retry", "Resend your last message"),
     ("stop", "Abort the current reply"),
     ("help", "What this bot can do"),
 ]
@@ -213,6 +216,7 @@ class TelegramBridge:
         self.manager = SessionManager(settings)
         self.app: Application | None = None
         self._lock_fh = None  # held open for the process lifetime (singleton guard)
+        self._last_text: dict[int, str] = {}  # per-chat last prompt, for /retry
 
     # --- wiring -------------------------------------------------------------
 
@@ -237,9 +241,13 @@ class TelegramBridge:
         for key in _FIELD_FOR:  # model, effort, mode, cost, timeout, idle
             app.add_handler(CommandHandler(key, self._runtime_handler(key), filters=private))
         app.add_handler(CommandHandler("cd", self._cmd_cd, filters=private))
+        app.add_handler(CommandHandler("retry", self._cmd_retry, filters=private))
         app.add_handler(CommandHandler("stop", self._cmd_stop, filters=private))
         app.add_handler(MessageHandler(filters.PHOTO & private, self._on_photo))
+        app.add_handler(MessageHandler(filters.Document.ALL & private, self._on_document))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private, self._on_text))
+        # Catch-all for message types we don't handle (voice, video, stickers, …).
+        app.add_handler(MessageHandler(private & ~filters.COMMAND, self._on_unsupported))
         app.add_error_handler(self._on_error)
         self.app = app
         return app
@@ -391,6 +399,15 @@ class TelegramBridge:
         else:
             await update.effective_message.reply_text("Nothing is running.")
 
+    async def _cmd_retry(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._guard(update):
+            return
+        last = self._last_text.get(update.effective_chat.id)
+        if not last:
+            await update.effective_message.reply_text("Nothing to retry yet.")
+            return
+        await self._handle(update, ctx, last)
+
     # --- messages -----------------------------------------------------------
 
     async def _on_text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -421,6 +438,42 @@ class TelegramBridge:
         caption = update.effective_message.caption or "Look at this image and tell me about it."
         await self._handle(update, ctx, caption, image_paths=[dest])
 
+    async def _on_document(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._guard(update):
+            return
+        doc = update.effective_message.document
+        if doc.file_size and doc.file_size > 20 * 1024 * 1024:
+            await update.effective_message.reply_text(
+                "⚠️ That file is larger than 20 MB (Telegram's bot download limit)."
+            )
+            return
+        inbox = state_dir() / "inbox"
+        inbox.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(OSError):
+            inbox.chmod(0o700)
+        safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", doc.file_name or "file")[:128] or "file"
+        uid = re.sub(r"[^A-Za-z0-9_-]", "_", doc.file_unique_id)[:64]
+        dest = inbox / f"{uid}_{safe_name}"
+        if inbox.resolve() not in dest.resolve().parents:
+            log.warning("rejected suspicious document path: %s", dest)
+            return
+        try:
+            tg_file = await ctx.bot.get_file(doc.file_id)
+            await tg_file.download_to_drive(str(dest))
+        except TelegramError as exc:
+            await update.effective_message.reply_text(f"⚠️ Couldn't download the file: {exc}")
+            return
+        caption = update.effective_message.caption or f"Read the attached file ({safe_name})."
+        await self._handle(update, ctx, caption, image_paths=[dest])
+
+    async def _on_unsupported(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._guard(update):
+            return
+        await update.effective_message.reply_text(
+            "I can handle text, photos, and documents right now — that message type "
+            "isn't supported yet."
+        )
+
     async def _handle(
         self,
         update: Update,
@@ -432,6 +485,8 @@ class TelegramBridge:
         text = text.strip()
         if not text and not image_paths:
             return
+        if text:
+            self._last_text[chat_id] = text  # for /retry
         session = await self.manager.get(chat_id)
         # Don't pile turns onto a busy session — tell the user instead of silently queuing.
         if session.busy:
