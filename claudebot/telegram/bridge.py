@@ -26,6 +26,7 @@ from telegram.ext import (
     filters,
 )
 
+from claudebot import version_string
 from claudebot.claude.manager import SessionManager
 from claudebot.core.config import PERMISSION_MODES, Settings
 from claudebot.core.logging import get_logger
@@ -314,6 +315,7 @@ class TelegramBridge:
         alive = "running" if session.is_alive else "idle (resumes on next message)"
         await update.effective_message.reply_text(
             "claudebot status\n"
+            f"• version: {version_string()}\n"
             f"• session: {session.session_id}\n"
             f"• state: {alive}\n"
             f"• working dir: {session.working_dir}\n"

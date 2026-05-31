@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from claudebot import __version__
+from claudebot import version_string
 from claudebot.core.config import load_settings
 from claudebot.core.logging import setup_logging
 
@@ -174,7 +174,12 @@ def cmd_update(args: argparse.Namespace) -> int:
     print(f"• source:        {src}")
     print(f"• target python: {target_py}")
 
-    if (src / ".git").is_dir():
+    is_git = (src / ".git").is_dir()
+    pre_sha = ""
+    if is_git:
+        pre_sha = subprocess.run(
+            ["git", "-C", str(src), "rev-parse", "HEAD"], capture_output=True, text=True
+        ).stdout.strip()
         if not args.no_pull:
             print("• git pull --ff-only")
             pull = subprocess.run(["git", "-C", str(src), "pull", "--ff-only"])
@@ -185,12 +190,26 @@ def cmd_update(args: argparse.Namespace) -> int:
         print("• (not a git repo — installing the local files as-is)")
 
     print("• pip install -e .   (picks up code + any new dependencies)")
-    rc = subprocess.run(
-        [target_py, "-m", "pip", "install", "-q", "-e", str(src)]
-    ).returncode
+    rc = subprocess.run([target_py, "-m", "pip", "install", "-q", "-e", str(src)]).returncode
     if rc != 0:
         print("✗ pip install failed")
+        _rollback(src, target_py, pre_sha)
         return rc
+
+    # Smoke gate: run the test suite against the pulled code BEFORE going live.
+    if not args.no_test:
+        has_pytest = subprocess.run(
+            [target_py, "-c", "import pytest"], capture_output=True
+        ).returncode == 0
+        if not has_pytest:
+            print("• (pytest not in the target env — skipping smoke gate; `pip install -e '.[dev]'` to enable)")
+        else:
+            print("• pytest -q   (smoke gate)")
+            gate = subprocess.run([target_py, "-m", "pytest", "-q"], cwd=str(src))
+            if gate.returncode != 0:
+                print("✗ tests failed on the pulled code — NOT restarting.")
+                _rollback(src, target_py, pre_sha)
+                return gate.returncode
 
     if not args.no_restart and manager is not None:
         try:
@@ -209,6 +228,15 @@ def cmd_update(args: argparse.Namespace) -> int:
     return 0
 
 
+def _rollback(src: Path, target_py: str, pre_sha: str) -> None:
+    """Revert a failed update: reset to the pre-pull commit and reinstall."""
+    if not pre_sha:
+        return
+    print(f"↩  rolling back to {pre_sha[:8]} and reinstalling…")
+    subprocess.run(["git", "-C", str(src), "reset", "--hard", pre_sha])
+    subprocess.run([target_py, "-m", "pip", "install", "-q", "-e", str(src)])
+
+
 def _telegram_getme(token: str) -> dict:
     url = f"https://api.telegram.org/bot{token}/getMe"
     with urllib.request.urlopen(url, timeout=10) as resp:  # noqa: S310 - fixed https host
@@ -221,7 +249,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="An always-on Telegram bot that drives the real Claude Code "
         "on your subscription (no API key, no Agent SDK).",
     )
-    parser.add_argument("-V", "--version", action="version", version=f"claudebot {__version__}")
+    parser.add_argument(
+        "-V", "--version", action="version", version=f"claudebot {version_string()}"
+    )
     sub = parser.add_subparsers(dest="command", metavar="<command>")
 
     sub.add_parser("run", help="Run the bot in the foreground.").set_defaults(func=cmd_run)
@@ -231,6 +261,7 @@ def build_parser() -> argparse.ArgumentParser:
     update = sub.add_parser("update", help="Pull latest, reinstall, and restart the service.")
     update.add_argument("--no-pull", action="store_true", help="Skip `git pull`.")
     update.add_argument("--no-restart", action="store_true", help="Reinstall without restarting.")
+    update.add_argument("--no-test", action="store_true", help="Skip the pytest smoke gate.")
     update.set_defaults(func=cmd_update)
 
     service = sub.add_parser("service", help="Manage the always-on service.")
