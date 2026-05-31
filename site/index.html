@@ -4,9 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>claudebot — Claude Code, from your phone</title>
-<meta name="description" content="A self-hosted Telegram bot that drives the real Claude Code binary on your own Pro/Max subscription. No API key, no Agent SDK, no per-token bill." />
+<meta name="description" content="A self-hosted Telegram bot that drives the real Claude Code binary on your own Pro/Max subscription. No API key to manage, nothing metered per token." />
 <meta property="og:title" content="claudebot — Claude Code, from your phone" />
-<meta property="og:description" content="Drive the real claude binary over Telegram on your own subscription. No API key. No Agent SDK. Open source, self-hosted." />
+<meta property="og:description" content="Drive the real claude binary over Telegram on your own subscription — no API key, nothing metered per token. Open source, self-hosted." />
 <meta property="og:type" content="website" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -40,8 +40,8 @@
   }
   .bg-grid{ position:fixed; inset:0; z-index:0; pointer-events:none;
     background:
-      radial-gradient(900px 520px at 78% -8%, rgba(232,137,90,.16), transparent 60%),
-      radial-gradient(700px 600px at 8% 8%, rgba(116,207,147,.06), transparent 55%),
+      radial-gradient(540px 460px at 83% 22%, rgba(232,137,90,.15), transparent 58%),
+      radial-gradient(620px 520px at 6% 10%, rgba(116,207,147,.045), transparent 55%),
       linear-gradient(var(--line) 1px, transparent 1px) 0 0/none,
       linear-gradient(90deg, var(--mut) 1px, transparent 1px) 0 0/64px 64px,
       linear-gradient(var(--mut) 1px, transparent 1px) 0 0/64px 64px;
@@ -59,8 +59,8 @@
   code, .code{font-family:var(--mono);font-size:.86em;background:var(--bg-3);border:1px solid var(--line);border-radius:6px;padding:.12em .42em;color:var(--amber-2)}
 
   /* ---- nav ---- */
-  nav{position:sticky;top:0;z-index:100;backdrop-filter:blur(14px);
-    background:linear-gradient(180deg,rgba(12,10,9,.86),rgba(12,10,9,.55));
+  nav{position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);
+    background:rgba(11,9,8,.93);
     border-bottom:1px solid var(--line)}
   .nav-in{max-width:var(--maxw);margin:0 auto;padding:14px 28px;display:flex;align-items:center;gap:28px}
   .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-0.03em;font-size:18px}
@@ -74,8 +74,8 @@
     padding:9px 15px;border-radius:9px;border:1px solid var(--line-2);background:var(--bg-3);color:var(--ink);
     transition:.2s;cursor:pointer;letter-spacing:-0.01em}
   .btn:hover{border-color:var(--amber);background:var(--bg-4);transform:translateY(-1px)}
-  .btn-amber{background:linear-gradient(160deg,var(--amber),var(--amber-deep));color:#190d06;border:none;font-weight:700;
-    box-shadow:0 8px 24px -10px var(--amber-deep)}
+  .btn-amber{background:var(--amber);color:#190d06;border:none;font-weight:700;
+    box-shadow:0 8px 24px -12px var(--amber-deep), inset 0 1px 0 rgba(255,226,202,.45)}
   .btn-amber:hover{filter:brightness(1.07);transform:translateY(-1px)}
   .nav-toggle{display:none;margin-left:auto;background:none;border:1px solid var(--line-2);border-radius:8px;color:var(--ink);padding:8px 10px;cursor:pointer}
 
@@ -144,6 +144,11 @@
   .sec-head h2{font-size:clamp(26px,3.4vw,40px);font-weight:700}
   .sec-head .sub{color:var(--ink-dim);font-size:16px;max-width:50ch}
   .rule{height:1px;background:linear-gradient(90deg,var(--line-2),transparent);margin:0}
+  /* deliberate rhythm — sections are NOT all equal weight */
+  #install{padding-top:100px}
+  #allowed{padding-bottom:30px}
+  #security{padding-top:38px}
+  #security .sec-head h2, #install .sec-head h2{font-size:clamp(30px,4.6vw,52px)}
 
   /* ---- three constraints ---- */
   .three{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
@@ -180,7 +185,7 @@
 
   /* ---- security ---- */
   .sec-ask{background:linear-gradient(160deg,#1c1109,#140e09);border:1px solid var(--amber-deep);border-radius:var(--r);padding:24px 26px;margin-bottom:24px;display:flex;gap:16px;align-items:flex-start}
-  .sec-ask .warn{font-size:24px;flex:0 0 auto}
+  .sec-ask .bang{font-family:var(--mono);font-weight:700;font-size:17px;color:#190d06;background:var(--amber);width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:0 0 auto;line-height:1}
   .sec-ask b{color:var(--amber-2)}
   .sec-ask p{color:var(--ink-dim);font-size:15.5px}
   .checks{display:grid;grid-template-columns:repeat(2,1fr);gap:13px}
@@ -213,7 +218,7 @@
   .cmd-card .c{font-family:var(--mono);font-size:14px;color:var(--amber-2);font-weight:500}
   .cmd-card .c .arg{color:var(--ink)}
   .cmd-card p{font-size:13.5px;color:var(--ink-dim)}
-  .cmds-note{margin-top:18px;font-size:14.5px;color:var(--ink-dim);text-align:center}
+  .cmds-note{margin-top:20px;font-size:14.5px;color:var(--ink-dim);border-left:2px solid var(--line-2);padding-left:14px}
 
   /* ---- install ---- */
   .install-grid{display:grid;grid-template-columns:.85fr 1.15fr;gap:30px;align-items:start}
@@ -304,9 +309,9 @@
 <header class="hero">
   <div class="wrap hero-grid">
     <div>
-      <span class="pill"><span class="dot"></span> Open source · MIT · self-hosted</span>
+      <span class="pill">Open source · MIT · self-hosted</span>
       <h1>Claude Code,<br><span class="line2">from your phone.</span></h1>
-      <p class="lede">A self-hosted Telegram bot that drives the <b>real <span class="mono">claude</span> binary</b> on your own Pro/Max subscription. No API key. No Agent SDK. No per-token bill.</p>
+      <p class="lede">A self-hosted Telegram bot that drives the <b>real <span class="mono">claude</span> binary</b> on the Pro/Max plan you already pay for. No API key to manage, nothing metered per token.</p>
 
       <div class="cmd">
         <span class="ps1">$</span>
@@ -319,7 +324,7 @@
         <a class="btn" href="https://github.com/samuelkimanikamau/claudebot" target="_blank" rel="noopener">View source</a>
       </div>
       <div class="hero-meta">
-        <span><span class="dot"></span> macOS &amp; Linux</span>
+        <span>macOS &amp; Linux</span>
         <span class="mono">needs Claude Code logged in</span>
       </div>
     </div>
@@ -340,7 +345,7 @@
             <div class="msg bot d2"><span class="h">claudebot</span>On it — editing <span class="mono" style="color:var(--amber-2)">auth.py</span>, running the suite…<div class="row"><span class="ok">⏵</span> Bash · pytest -q</div></div>
             <div class="msg bot d3"><span class="h">claudebot</span><b>Done.</b> Fixed the token refresh race; <span class="grn">38 passed</span> in 0.9s. Pushed to <span class="mono">main</span>.<span class="caret"></span></div>
             <div class="msg me d4">/model opus<div class="stamp">09:42</div></div>
-            <div class="msg bot d5"><span class="h">claudebot</span>✅ model set to opus. 🆕 fresh session.</div>
+            <div class="msg bot d5"><span class="h">claudebot</span>model set to opus · fresh session</div>
           </div>
         </div>
       </div>
@@ -353,15 +358,15 @@
 <section id="why">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">01 / THE MOAT</span>
-      <h2>Three constraints, all satisfied.</h2>
+      <span class="sec-num">// what makes it different</span>
+      <h2>Three things, true at once.</h2>
       <span class="sub">Other wrappers each give you some of these. claudebot is the intersection.</span>
     </div>
     <div class="three">
       <div class="card reveal">
         <div class="ic">‹/›</div>
         <h3>The real binary</h3>
-        <p>It shells out to the genuine <span class="mono amber">claude</span> you already use — same harness, same tools, same login. Not the Agent SDK. Not an API reimplementation.</p>
+        <p>It shells out to the genuine <span class="mono amber">claude</span> you already use: the same harness, tools, and login. It's the real binary, not the Agent SDK or an API reimplementation.</p>
       </div>
       <div class="card reveal">
         <div class="ic">∅$</div>
@@ -371,7 +376,7 @@
       <div class="card reveal">
         <div class="ic">⌨</div>
         <h3>You own the UX</h3>
-        <p>Your own bot process owns Telegram. Switch models, dial effort, send a photo or a PDF, stream replies — every knob is one message away.</p>
+        <p>Your own bot process owns Telegram. Switch models, dial effort, send a photo or a PDF, stream replies. No redeploy, no config file — just another message.</p>
       </div>
     </div>
   </div>
@@ -381,7 +386,7 @@
 <section id="how">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">02 / ARCHITECTURE</span>
+      <span class="sec-num">// how it works</span>
       <h2>It owns the loop.</h2>
       <span class="sub">One persistent <span class="mono">claude</span> per chat, kept warm — driven over its headless stream-json protocol.</span>
     </div>
@@ -404,9 +409,9 @@
 <section id="allowed">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">03 / TRUST</span>
+      <span class="sec-num">// the policy question</span>
       <h2>Is this allowed?</h2>
-      <span class="sub">The honest answer — yes, with one bright line.</span>
+      <span class="sub">Yes — with one bright line.</span>
     </div>
     <div class="allowed">
       <div class="prose reveal">
@@ -427,13 +432,13 @@
 <section id="security">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">04 / SECURITY POSTURE</span>
+      <span class="sec-num">// security</span>
       <h2>Treat it like a root shell.</h2>
-      <span class="sub">Because it is one — and it's built to be handled that way.</span>
+      <span class="sub">Because it is one. The defaults are paranoid: one Telegram ID, one directory, fail-closed.</span>
     </div>
     <div class="sec-ask reveal">
-      <span class="warn">⚠️</span>
-      <p><b>By default, Claude runs any tool — including Bash — without asking.</b> Run claudebot only on a machine you trust, scoped to a working directory, gated to your own Telegram ID. The bot is the owner's remote shell, not a public service.</p>
+      <span class="bang">!</span>
+      <p><b>By default, Claude runs any tool, including Bash, without asking.</b> Run claudebot only on a machine you trust, scoped to a working directory, gated to your own Telegram ID. The bot is the owner's remote shell, not a public service.</p>
     </div>
     <div class="checks">
       <div class="check reveal"><span class="tick">✓</span><div><b>Fail-closed allowlist</b><p>Empty list = locked to nobody. DM-only handlers; group &amp; channel traffic ignored.</p></div></div>
@@ -450,9 +455,9 @@
 <section id="compare">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">05 / THE FIELD</span>
+      <span class="sec-num">// vs. the alternatives</span>
       <h2>How it compares.</h2>
-      <span class="sub">Honest, verifiable distinctions — not vague “better”.</span>
+      <span class="sub">Specific differences you can verify, not vague “better”.</span>
     </div>
     <div class="tablewrap reveal">
       <table>
@@ -473,7 +478,7 @@
 <section id="commands">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">06 / CONTROL</span>
+      <span class="sec-num">// commands</span>
       <h2>Drive it from your phone.</h2>
       <span class="sub">Every Claude Code knob, one message away.</span>
     </div>
@@ -493,7 +498,7 @@
 <section id="install">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">07 / INSTALL</span>
+      <span class="sec-num">// install</span>
       <h2>Running in 30 seconds.</h2>
       <span class="sub">One command — after a two-minute checklist so nothing fails silently.</span>
     </div>
@@ -539,13 +544,13 @@
 <section id="faq">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">08 / FAQ</span>
+      <span class="sec-num">// faq</span>
       <h2>Single-user, by design.</h2>
     </div>
     <div class="faq reveal">
       <details open><summary>Can I add my team? <span class="plus">+</span></summary><p><b>No — and that's deliberate.</b> Letting others prompt through your subscription is account sharing (a ban risk), and it hands them a shell on your machine. One subscription, one trusted machine, one Telegram ID. A real multi-user product needs per-user credentials, quotas, and isolation — that's a different project.</p></details>
-      <details><summary>Is there a hosted version? <span class="plus">+</span></summary><p><b>No, by design.</b> claudebot runs on <b>your</b> subscription, so there's nothing to host without sharing accounts. That's a feature, not a gap — it's why there's no per-token bill. Self-host it in 30 seconds instead.</p></details>
-      <details><summary>What does it cost? <span class="plus">+</span></summary><p>Nothing beyond the Claude plan you already pay for. claudebot is <b>free and MIT-licensed</b>. No API metering, no subscription, no upsell.</p></details>
+      <details><summary>Is there a hosted version? <span class="plus">+</span></summary><p><b>No, by design.</b> claudebot runs on <b>your</b> subscription, so there's nothing to host without sharing accounts — which is exactly why there's no per-token bill. Self-host it in 30 seconds instead.</p></details>
+      <details><summary>What does it cost? <span class="plus">+</span></summary><p>Nothing beyond the Claude plan you already pay for. claudebot is <b>free and MIT-licensed</b>, with no API metering on top and nothing to upgrade to.</p></details>
       <details><summary>Which platforms? <span class="plus">+</span></summary><p><b>macOS</b> (launchd) and <b>Linux</b> (systemd --user). Both keep the bot always-on with auto-restart. You'll need Claude Code installed and logged in, and Python 3.10+.</p></details>
       <details><summary>Will this get my account banned? <span class="plus">+</span></summary><p>The risk is in <i>how</i> you use it, not the tool. claudebot keeps the token inside the genuine <span class="mono">claude</span> binary — the supported path. Stay single-user, never extract the token, and don't run pathological 24/7 loops. See <a href="#allowed" style="color:var(--amber-2)">“Is this allowed?”</a> for the honest detail.</p></details>
     </div>
