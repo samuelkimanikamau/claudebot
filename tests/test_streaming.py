@@ -82,3 +82,47 @@ async def test_finalize_cancels_pending_preview_and_sends_authoritative_reply():
     bot.release_preview.set()
     if not preview_task.done():
         await asyncio.wait_for(preview_task, timeout=0.1)
+
+
+class RecordBot:
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, str | None, int]] = []
+        self.edited: list[tuple[str, str | None, int]] = []
+        self._next = 0
+
+    async def send_message(self, chat_id, text, parse_mode=None):
+        self._next += 1
+        self.sent.append((text, parse_mode, self._next))
+        return FakeMessage(self._next)
+
+    async def edit_message_text(self, text, chat_id, message_id, parse_mode=None):
+        self.edited.append((text, parse_mode, message_id))
+
+
+async def test_progressive_streaming_preserves_head_no_reorder():
+    bot = RecordBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
+    # A 2-block buffer (chunk boundary is 3500).
+    streamer._buffer = "A" * 3500 + "\n" + "B" * 1000
+    await streamer._preview_now()
+    assert len(streamer._block_ids) == 2
+    head_id = streamer._block_ids[0]
+    assert bot.sent[0][0].startswith("A")  # head streamed first
+    assert bot.sent[1][0].startswith("B")
+
+    await streamer.finalize(streamer._buffer)
+    # finalize upgrades blocks IN PLACE: head keeps its message id, no new head send.
+    assert streamer._block_ids[0] == head_id
+    assert any(mid == head_id and text.startswith("A") for text, _m, mid in bot.edited)
+    assert len(bot.sent) == 2  # no extra head message created at finalize
+
+
+async def test_finalize_blanks_leftover_blocks_when_reply_shrinks():
+    bot = RecordBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
+    streamer._buffer = "A" * 3500 + "\n" + "B" * 1000  # streamed as 2 blocks
+    await streamer._preview_now()
+    assert len(streamer._block_ids) == 2
+    # Final reply is short -> 1 chunk; the 2nd streamed bubble must be blanked.
+    await streamer.finalize("short final")
+    assert any(mid == streamer._block_ids[1] and text == "…" for text, _m, mid in bot.edited)

@@ -1,20 +1,20 @@
-"""Render a Claude turn into Telegram as it streams.
+"""Render a Claude turn into Telegram as it streams — progressively, head-first.
 
-UX rule (borrowed from the better Claude bots): own ONE live message and edit it
-forward while Claude types, then on completion lay down the authoritative reply —
-rendered as Telegram MarkdownV2 (bold, code, tables→monospace), chunked across
-messages at the 4096-char limit.
+The reply is streamed into a series of stable per-block messages (one per ~3500
+chars, the SAME boundary finalize() uses). The user reads it from the TOP, growing
+downward; nothing is shown as a throwaway tail, and finalize() never jumps back to
+the start — it just upgrades each existing block bubble from plain text to
+MarkdownV2 in place. So what you watched stream is exactly what you keep.
 
-Two safety properties:
-* The live *preview* is sent as PLAIN text — formatting a half-finished message
-  would routinely cut a Markdown entity and get rejected mid-stream.
-* The final send tries MarkdownV2 first and falls back to plain text per chunk,
-  so a reply is never lost to a formatting/parse error.
+A background ``_preview_worker`` throttles the live edits off the stdout-read path,
+and the final send tries MarkdownV2 first with a plain-text fallback per block, so
+a reply is never lost to a formatting/parse error.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 
 from telegram.error import BadRequest, RetryAfter, TelegramError
@@ -28,7 +28,7 @@ from claudebot.telegram.format import to_telegram
 log = get_logger("claudebot.telegram.stream")
 
 _HARD_LIMIT = 4096          # Telegram's max message length
-_RAW_LIMIT = 3500           # chunk raw markdown here; leaves room for MarkdownV2 escaping
+_RAW_LIMIT = 3500           # block/chunk boundary; leaves room for MarkdownV2 escaping
 
 
 def chunk_text(text: str, limit: int = _RAW_LIMIT) -> list[str]:
@@ -60,13 +60,15 @@ class Streamer:
         self.stream_partials = settings.stream_partials
         self.markdown = settings.markdown
         self._buffer = ""
-        self._live_id: int | None = None
-        self._last_preview: str | None = None
+        # One Telegram message per streamed block; _block_last[i] is the plain text
+        # last shown in block i (to skip 'not modified' edits).
+        self._block_ids: list[int] = []
+        self._block_last: list[str] = []
         self._last_edit = 0.0
         self._finalized = False
         self._preview_task: asyncio.Task | None = None
 
-    # --- live streaming (plain text) ----------------------------------------
+    # --- live streaming (plain text, head-anchored blocks) ------------------
 
     async def on_event(self, event: ClaudeEvent) -> None:
         if self._finalized:
@@ -97,7 +99,7 @@ class Streamer:
                 if delay > 0:
                     await asyncio.sleep(delay)
                 await self._preview_now()
-                if self._finalized or self._preview_text() == self._last_preview:
+                if self._finalized or self._preview_blocks() == self._block_last:
                     break
         except asyncio.CancelledError:
             raise
@@ -107,26 +109,32 @@ class Streamer:
             if self._preview_task is asyncio.current_task():
                 self._preview_task = None
 
-    def _preview_text(self) -> str:
-        text = self._buffer
-        return text if len(text) <= _HARD_LIMIT else "…" + text[-(_HARD_LIMIT - 1):]
+    def _preview_blocks(self) -> list[str]:
+        """Split the buffer into blocks using the SAME boundary finalize() uses."""
+        if not self._buffer.strip():
+            return []
+        return chunk_text(self._buffer, _RAW_LIMIT)
 
     async def _preview_now(self) -> None:
-        text = self._buffer
-        if not text.strip():
+        # A worker that slipped past the loop guard must not edit after finalize().
+        if self._finalized:
             return
-        shown = self._preview_text()
-        if shown == self._last_preview:
+        blocks = self._preview_blocks()
+        if not blocks:
             return
         try:
-            if self._live_id is None:
-                msg = await self.bot.send_message(self.chat_id, shown)
-                self._live_id = msg.message_id
-            else:
-                await self.bot.edit_message_text(
-                    shown, chat_id=self.chat_id, message_id=self._live_id
-                )
-            self._last_preview = shown
+            for i, blk in enumerate(blocks):
+                if i < len(self._block_ids):
+                    if self._block_last[i] == blk:
+                        continue  # unchanged -> skip ('message is not modified')
+                    await self.bot.edit_message_text(
+                        blk, chat_id=self.chat_id, message_id=self._block_ids[i]
+                    )
+                    self._block_last[i] = blk
+                else:
+                    msg = await self.bot.send_message(self.chat_id, blk)
+                    self._block_ids.append(msg.message_id)
+                    self._block_last.append(blk)
             self._last_edit = time.monotonic()
         except RetryAfter as exc:
             await asyncio.sleep(exc.retry_after + 0.5)
@@ -139,21 +147,32 @@ class Streamer:
         task, self._preview_task = self._preview_task, None
         if task is not None and not task.done():
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
-    # --- finalization (formatted, with plain fallback) ----------------------
+    # --- finalization (in-place MarkdownV2 upgrade per block) ---------------
 
     async def finalize(self, text: str) -> None:
         self._finalized = True
         await self._cancel_preview()
         raw = (text or "").strip() or "(no reply)"
-        chunks = chunk_text(raw)
-        self._live_id = await self._send(chunks[0], edit_id=self._live_id)
-        for chunk in chunks[1:]:
-            await self._send(chunk, edit_id=None)
+        chunks = chunk_text(raw)  # same _RAW_LIMIT boundary as the streamed blocks
+        for i, chunk in enumerate(chunks):
+            if i < len(self._block_ids):
+                # Upgrade the block the user already watched: plain -> MarkdownV2, in place.
+                await self._send(chunk, edit_id=self._block_ids[i])
+            else:
+                msg_id = await self._send(chunk, edit_id=None)
+                if msg_id is not None:
+                    self._block_ids.append(msg_id)
+                    self._block_last.append(chunk)
+        # Reply ended up SHORTER than what streamed -> blank the leftover bubbles
+        # so a stale streamed tail isn't left behind.
+        for j in range(len(chunks), len(self._block_ids)):
+            with contextlib.suppress(TelegramError):
+                await self.bot.edit_message_text(
+                    "…", chat_id=self.chat_id, message_id=self._block_ids[j]
+                )
 
     async def _send(self, raw: str, edit_id: int | None) -> int | None:
         """Send/edit one chunk: MarkdownV2 first, then plain text on rejection."""
@@ -192,14 +211,12 @@ class Streamer:
         self._finalized = True
         await self._cancel_preview()
         try:
-            if self._live_id is not None:
+            if self._block_ids:
                 await self.bot.edit_message_text(
-                    message, chat_id=self.chat_id, message_id=self._live_id
+                    message, chat_id=self.chat_id, message_id=self._block_ids[0]
                 )
             else:
                 await self.bot.send_message(self.chat_id, message)
         except TelegramError:
-            try:
+            with contextlib.suppress(TelegramError):
                 await self.bot.send_message(self.chat_id, message)
-            except TelegramError:
-                pass
