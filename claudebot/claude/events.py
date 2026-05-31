@@ -70,10 +70,6 @@ def is_result(e: ClaudeEvent) -> bool:
     return e.type == "result"
 
 
-def is_rate_limit(e: ClaudeEvent) -> bool:
-    return "rate_limit" in e.type
-
-
 # --- field extractors -------------------------------------------------------
 
 def assistant_text(e: ClaudeEvent) -> str:

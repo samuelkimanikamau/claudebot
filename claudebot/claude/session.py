@@ -26,7 +26,7 @@ import os
 import time
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from claudebot.claude import events
@@ -68,7 +68,6 @@ class TurnResult:
     session_id: str
     is_error: bool = False
     cost: float | None = None
-    tools_used: list[str] = field(default_factory=list)
 
 
 class ClaudeSession:
@@ -131,11 +130,12 @@ class ClaudeSession:
                     "chat %s: child gone during turn; not retrying user message",
                     self.chat_id,
                 )
+                hint = f"\n\nLast error: {self._last_stderr[:300]}" if self._last_stderr else ""
                 return TurnResult(
                     text=(
                         "⚠️ Claude process stopped before finishing. I did not retry "
                         "automatically to avoid duplicating side effects — send the "
-                        "message again if you want me to rerun it."
+                        "message again if you want me to rerun it." + hint
                     ),
                     session_id=self.session_id,
                     is_error=True,
@@ -189,8 +189,7 @@ class ClaudeSession:
     ) -> TurnResult:
         await self._write_user(text, image_paths)
 
-        collected: list[str] = []
-        tools: list[str] = []
+        collected: list[str] = []  # fallback only — used if the result event has no text
         result_event: ClaudeEvent | None = None
 
         while True:
@@ -205,7 +204,6 @@ class ClaudeSession:
                     log.debug("chat %s: on_event error: %s", self.chat_id, exc)
             if events.is_assistant(event):
                 collected.append(events.assistant_text(event))
-                tools.extend(events.assistant_tool_names(event))
             elif events.is_result(event):
                 result_event = event
                 break
@@ -219,7 +217,6 @@ class ClaudeSession:
             session_id=self.session_id,
             is_error=events.result_is_error(result_event),
             cost=events.result_cost(result_event),
-            tools_used=tools,
         )
 
     async def _write_user(self, text: str, image_paths: Sequence[Path] | None) -> None:

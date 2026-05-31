@@ -231,13 +231,10 @@ class TelegramBridge:
         app.add_handler(CommandHandler("new", self._cmd_new, filters=private))
         app.add_handler(CommandHandler("status", self._cmd_status, filters=private))
         app.add_handler(CommandHandler("config", self._cmd_config, filters=private))
-        app.add_handler(CommandHandler("model", self._cmd_model, filters=private))
-        app.add_handler(CommandHandler("effort", self._cmd_effort, filters=private))
-        app.add_handler(CommandHandler("mode", self._cmd_mode, filters=private))
         app.add_handler(CommandHandler("tools", self._cmd_tools, filters=private))
-        app.add_handler(CommandHandler("cost", self._cmd_cost, filters=private))
-        app.add_handler(CommandHandler("timeout", self._cmd_timeout, filters=private))
-        app.add_handler(CommandHandler("idle", self._cmd_idle, filters=private))
+        # The 6 runtime-setting commands all route through _cmd_runtime.
+        for key in _FIELD_FOR:  # model, effort, mode, cost, timeout, idle
+            app.add_handler(CommandHandler(key, self._runtime_handler(key), filters=private))
         app.add_handler(CommandHandler("cd", self._cmd_cd, filters=private))
         app.add_handler(CommandHandler("stop", self._cmd_stop, filters=private))
         app.add_handler(MessageHandler(filters.PHOTO & private, self._on_photo))
@@ -338,23 +335,13 @@ class TelegramBridge:
         session = await self.manager.get(update.effective_chat.id)
         await update.effective_message.reply_text(_format_tools(session.settings))
 
-    async def _cmd_model(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._cmd_runtime(update, ctx, "model")
+    def _runtime_handler(self, key: str):
+        """Build a CommandHandler callback bound to one runtime-setting key."""
 
-    async def _cmd_effort(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._cmd_runtime(update, ctx, "effort")
+        async def handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+            await self._cmd_runtime(update, ctx, key)
 
-    async def _cmd_mode(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._cmd_runtime(update, ctx, "mode")
-
-    async def _cmd_cost(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._cmd_runtime(update, ctx, "cost")
-
-    async def _cmd_timeout(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._cmd_runtime(update, ctx, "timeout")
-
-    async def _cmd_idle(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._cmd_runtime(update, ctx, "idle")
+        return handler
 
     async def _cmd_runtime(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, key: str) -> None:
         if not await self._guard(update):
