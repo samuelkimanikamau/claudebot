@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>claudebot — Claude Code, from your phone</title>
+<meta name="description" content="A self-hosted Telegram bot that drives the real Claude Code binary on your own Pro/Max subscription. No API key, no Agent SDK, no per-token bill." />
+<meta property="og:title" content="claudebot — Claude Code, from your phone" />
+<meta property="og:description" content="Drive the real claude binary over Telegram on your own subscription. No API key. No Agent SDK. Open source, self-hosted." />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0c0a09; --bg-2:#13110e; --bg-3:#1a1611; --bg-4:#221c16;
+    --line:#2a231c; --line-2:#3a2f25;
+    --ink:#ece3d6; --ink-dim:#a99a86; --ink-faint:#71655622;
+    --mut:#82766608;
+    --amber:#e8895a; --amber-2:#f3a878; --amber-deep:#c96a3e;
+    --green:#74cf93; --green-2:#9ae3b2;
+    --display:"Bricolage Grotesque",-apple-system,system-ui,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+    --maxw:1180px;
+    --r:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--display);
+    font-size:17px; line-height:1.6; letter-spacing:-0.01em;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  ::selection{background:var(--amber); color:#160d08}
+  a{color:inherit;text-decoration:none}
+  /* ---- texture / atmosphere ---- */
+  body::before{ /* warm grain */
+    content:""; position:fixed; inset:0; z-index:9999; pointer-events:none; opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .bg-grid{ position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(900px 520px at 78% -8%, rgba(232,137,90,.16), transparent 60%),
+      radial-gradient(700px 600px at 8% 8%, rgba(116,207,147,.06), transparent 55%),
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0/none,
+      linear-gradient(90deg, var(--mut) 1px, transparent 1px) 0 0/64px 64px,
+      linear-gradient(var(--mut) 1px, transparent 1px) 0 0/64px 64px;
+    mask-image:linear-gradient(180deg,#000,#000 60%,transparent);
+  }
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px;position:relative;z-index:1}
+
+  /* ---- typographic helpers ---- */
+  .mono{font-family:var(--mono)}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber);font-weight:500}
+  .sec-num{font-family:var(--mono);font-size:12.5px;letter-spacing:.1em;color:var(--ink-dim);opacity:.65}
+  h1,h2,h3{font-weight:700;letter-spacing:-0.035em;line-height:1.02}
+  .amber{color:var(--amber-2)}
+  .grn{color:var(--green-2)}
+  code, .code{font-family:var(--mono);font-size:.86em;background:var(--bg-3);border:1px solid var(--line);border-radius:6px;padding:.12em .42em;color:var(--amber-2)}
+
+  /* ---- nav ---- */
+  nav{position:sticky;top:0;z-index:100;backdrop-filter:blur(14px);
+    background:linear-gradient(180deg,rgba(12,10,9,.86),rgba(12,10,9,.55));
+    border-bottom:1px solid var(--line)}
+  .nav-in{max-width:var(--maxw);margin:0 auto;padding:14px 28px;display:flex;align-items:center;gap:28px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-0.03em;font-size:18px}
+  .logo{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+    background:linear-gradient(150deg,var(--amber),var(--amber-deep));color:#1a0f08;flex:0 0 auto;
+    font-family:var(--mono);font-weight:700;font-size:15px;box-shadow:0 0 0 1px rgba(255,180,130,.25), 0 6px 20px -8px var(--amber-deep)}
+  .nav-links{display:flex;gap:24px;margin-left:auto;align-items:center}
+  .nav-links a{font-size:14.5px;color:var(--ink-dim);transition:color .2s}
+  .nav-links a:hover{color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13.5px;font-weight:500;
+    padding:9px 15px;border-radius:9px;border:1px solid var(--line-2);background:var(--bg-3);color:var(--ink);
+    transition:.2s;cursor:pointer;letter-spacing:-0.01em}
+  .btn:hover{border-color:var(--amber);background:var(--bg-4);transform:translateY(-1px)}
+  .btn-amber{background:linear-gradient(160deg,var(--amber),var(--amber-deep));color:#190d06;border:none;font-weight:700;
+    box-shadow:0 8px 24px -10px var(--amber-deep)}
+  .btn-amber:hover{filter:brightness(1.07);transform:translateY(-1px)}
+  .nav-toggle{display:none;margin-left:auto;background:none;border:1px solid var(--line-2);border-radius:8px;color:var(--ink);padding:8px 10px;cursor:pointer}
+
+  /* ---- hero ---- */
+  .hero{padding:78px 0 60px;position:relative}
+  .hero-grid{display:grid;grid-template-columns:1.06fr .94fr;gap:54px;align-items:center}
+  .hero h1{font-size:clamp(40px,5.6vw,68px);font-weight:800;letter-spacing:-0.045em;margin:18px 0 0}
+  .hero h1 .line2{color:var(--ink-dim)}
+  .hero .lede{font-size:clamp(17px,2vw,20px);color:var(--ink-dim);max-width:33ch;margin:22px 0 0;letter-spacing:-0.015em}
+  .hero .lede b{color:var(--ink);font-weight:600}
+  .pill{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-dim);border:1px solid var(--line);border-radius:999px;padding:6px 13px;background:var(--bg-2)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 9px var(--green)}
+  .blink{animation:blink 1.4s steps(1) infinite}
+  @keyframes blink{50%{opacity:.25}}
+
+  .cmd{margin-top:30px;display:flex;align-items:stretch;border:1px solid var(--line-2);border-radius:12px;background:#0a0807;overflow:hidden;max-width:560px;box-shadow:0 20px 50px -28px #000}
+  .cmd .ps1{font-family:var(--mono);color:var(--amber);padding:14px 4px 14px 16px;font-size:13.5px;user-select:none}
+  .cmd code{background:none;border:none;color:var(--ink);padding:14px 8px;font-size:13.5px;flex:1;overflow-x:auto;white-space:nowrap;display:flex;align-items:center}
+  .cmd .copy{border:none;border-left:1px solid var(--line);background:var(--bg-3);color:var(--ink-dim);
+    padding:0 16px;font-family:var(--mono);font-size:12px;cursor:pointer;transition:.2s;letter-spacing:.05em}
+  .cmd .copy:hover{color:var(--amber-2);background:var(--bg-4)}
+  .cmd .copy.ok{color:var(--green-2)}
+  .hero-cta{display:flex;gap:13px;margin-top:24px;flex-wrap:wrap}
+  .hero-meta{margin-top:22px;font-family:var(--mono);font-size:12.5px;color:var(--ink-dim);display:flex;gap:18px;flex-wrap:wrap}
+  .hero-meta span{display:flex;align-items:center;gap:7px}
+
+  /* ---- phone / chat demo ---- */
+  .stage{position:relative;display:flex;justify-content:center}
+  .phone{width:330px;max-width:100%;background:var(--bg-2);border:1px solid var(--line-2);border-radius:30px;
+    padding:11px;box-shadow:0 40px 90px -40px #000, 0 0 0 1px rgba(255,170,120,.05), inset 0 1px 0 rgba(255,255,255,.03);position:relative}
+  .phone::before{content:"";position:absolute;top:20px;left:50%;transform:translateX(-50%);width:92px;height:5px;border-radius:3px;background:#000;opacity:.5;z-index:3}
+  .screen{background:linear-gradient(180deg,#0e0c0b,#100d0b);border-radius:21px;overflow:hidden;border:1px solid var(--line)}
+  .tg-head{display:flex;align-items:center;gap:11px;padding:16px 15px 13px;border-bottom:1px solid var(--line);background:#15110e}
+  .tg-av{width:38px;height:38px;border-radius:50%;background:linear-gradient(150deg,var(--amber),var(--amber-deep));display:grid;place-items:center;color:#190d06;font-family:var(--mono);font-weight:700;font-size:16px}
+  .tg-name{font-weight:700;font-size:15px;letter-spacing:-0.02em}
+  .tg-status{font-size:12px;color:var(--green-2);font-family:var(--mono);display:flex;align-items:center;gap:6px}
+  .chat{padding:16px 13px 18px;display:flex;flex-direction:column;gap:10px;min-height:386px;
+    background:
+      radial-gradient(circle at 18% 12%, rgba(232,137,90,.05), transparent 40%),
+      repeating-linear-gradient(45deg, transparent 0 18px, rgba(255,255,255,.008) 18px 19px)}
+  .msg{max-width:84%;padding:9px 13px;border-radius:15px;font-size:13.6px;line-height:1.5;opacity:0;transform:translateY(8px);
+    animation:rise .5s cubic-bezier(.2,.8,.2,1) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .me{align-self:flex-end;background:linear-gradient(160deg,var(--amber-deep),#9c4f2c);color:#fbeee6;border-bottom-right-radius:5px}
+  .bot{align-self:flex-start;background:var(--bg-4);border:1px solid var(--line-2);border-bottom-left-radius:5px;color:var(--ink)}
+  .bot .h{color:var(--amber-2);font-weight:700;display:block;margin-bottom:3px;font-size:13px}
+  .bot .row{display:flex;gap:7px;font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin-top:2px}
+  .bot .ok{color:var(--green-2)}
+  .d1{animation-delay:.3s}.d2{animation-delay:1.0s}.d3{animation-delay:1.7s}.d4{animation-delay:2.5s}.d5{animation-delay:3.2s}
+  .typing{align-self:flex-start;display:flex;gap:4px;padding:12px 14px;background:var(--bg-4);border:1px solid var(--line-2);border-radius:15px;border-bottom-left-radius:5px;
+    opacity:0;animation:rise .4s .55s forwards, fadeout .3s 1.55s forwards}
+  @keyframes fadeout{to{opacity:0;height:0;padding:0;margin:-5px 0;overflow:hidden}}
+  .typing i{width:7px;height:7px;border-radius:50%;background:var(--ink-dim);animation:bob 1s infinite}
+  .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+  @keyframes bob{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
+  .caret{display:inline-block;width:7px;height:14px;background:var(--amber-2);vertical-align:-2px;margin-left:2px;animation:blink 1s steps(1) infinite}
+  .stamp{font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);opacity:.6;margin-top:1px}
+  .me .stamp{text-align:right}
+  .under{margin-top:18px;font-family:var(--mono);font-size:12px;color:var(--ink-dim);text-align:center;line-height:1.7}
+  .under b{color:var(--amber-2);font-weight:500}
+
+  /* ---- sections ---- */
+  section{padding:62px 0;position:relative}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:34px;flex-wrap:wrap}
+  .sec-head h2{font-size:clamp(26px,3.4vw,40px);font-weight:700}
+  .sec-head .sub{color:var(--ink-dim);font-size:16px;max-width:50ch}
+  .rule{height:1px;background:linear-gradient(90deg,var(--line-2),transparent);margin:0}
+
+  /* ---- three constraints ---- */
+  .three{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .card{background:linear-gradient(180deg,var(--bg-2),var(--bg-2)) padding-box,linear-gradient(160deg,var(--line-2),transparent) border-box;
+    border:1px solid transparent;border-radius:var(--r);padding:26px 24px;position:relative;transition:.25s;overflow:hidden}
+  .card:hover{transform:translateY(-3px)}
+  .card .n{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:.1em}
+  .card h3{font-size:21px;margin:14px 0 9px;letter-spacing:-0.03em}
+  .card p{font-size:15px;color:var(--ink-dim);line-height:1.62}
+  .card .ic{font-family:var(--mono);font-size:22px;color:var(--amber-2)}
+
+  /* ---- how it works ---- */
+  .flow{display:grid;grid-template-columns:1fr;gap:0;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .flow-diagram{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:36px 26px;font-family:var(--mono);font-size:13.5px;
+    background:radial-gradient(600px 200px at 50% 0%, rgba(232,137,90,.07), transparent)}
+  .node{border:1px solid var(--line-2);background:var(--bg-3);border-radius:10px;padding:13px 17px;display:flex;flex-direction:column;gap:3px;min-width:0}
+  .node b{color:var(--ink);font-size:13.5px}
+  .node span{color:var(--ink-dim);font-size:11.5px}
+  .node.accent{border-color:var(--amber-deep);box-shadow:0 0 0 1px rgba(232,137,90,.15)}
+  .node.accent b{color:var(--amber-2)}
+  .arrow{color:var(--amber);font-size:18px;opacity:.8}
+  .flow-note{padding:18px 26px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:14.5px;display:flex;gap:10px;align-items:center;font-family:var(--mono)}
+
+  /* ---- allowed ---- */
+  .allowed{display:grid;grid-template-columns:1.25fr .75fr;gap:30px;align-items:start}
+  .prose p{color:var(--ink-dim);font-size:16.5px;margin-bottom:16px;line-height:1.68}
+  .prose p b{color:var(--ink);font-weight:600}
+  .lines{display:flex;flex-direction:column;gap:11px}
+  .ln{display:flex;gap:13px;align-items:flex-start;background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:15px 16px}
+  .ln .x{font-family:var(--mono);color:var(--amber);font-weight:700;font-size:14px;flex:0 0 auto;margin-top:1px}
+  .ln b{font-weight:600;font-size:14.5px}
+  .ln p{font-size:13.5px;color:var(--ink-dim);margin:3px 0 0;font-family:var(--mono);line-height:1.5}
+  .hedge{margin-top:18px;border-left:2px solid var(--amber);padding:4px 0 4px 16px;color:var(--ink-dim);font-size:14.5px;font-style:italic}
+
+  /* ---- security ---- */
+  .sec-ask{background:linear-gradient(160deg,#1c1109,#140e09);border:1px solid var(--amber-deep);border-radius:var(--r);padding:24px 26px;margin-bottom:24px;display:flex;gap:16px;align-items:flex-start}
+  .sec-ask .warn{font-size:24px;flex:0 0 auto}
+  .sec-ask b{color:var(--amber-2)}
+  .sec-ask p{color:var(--ink-dim);font-size:15.5px}
+  .checks{display:grid;grid-template-columns:repeat(2,1fr);gap:13px}
+  .check{display:flex;gap:13px;background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:16px 17px}
+  .check .tick{color:var(--green-2);font-family:var(--mono);font-weight:700;flex:0 0 auto}
+  .check b{font-size:14.5px;font-weight:600;display:block;margin-bottom:3px}
+  .check p{font-size:13px;color:var(--ink-dim);line-height:1.5}
+
+  /* ---- comparison ---- */
+  .tablewrap{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--bg-2)}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th,td{padding:15px 16px;text-align:left;border-bottom:1px solid var(--line)}
+  thead th{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);font-weight:500;background:#100d0b}
+  th:first-child,td:first-child{text-align:left}
+  th:not(:first-child),td:not(:first-child){text-align:center;width:130px}
+  tbody tr:last-child td{border-bottom:none}
+  tr.me-row{background:linear-gradient(90deg,rgba(232,137,90,.08),transparent)}
+  tr.me-row td:first-child{font-weight:700;color:var(--ink)}
+  td .y{color:var(--green-2);font-family:var(--mono);font-weight:700}
+  td .meh{color:var(--ink-dim);font-family:var(--mono);font-size:12px}
+  td .no{color:var(--amber);font-family:var(--mono);font-size:12px}
+  .rowname{display:flex;flex-direction:column;gap:2px}
+  .rowname small{font-family:var(--mono);font-size:11px;color:var(--ink-dim);font-weight:400}
+  .tbl-note{font-size:13.5px;color:var(--ink-dim);margin-top:14px;font-style:italic}
+
+  /* ---- commands showcase ---- */
+  .cmds{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .cmd-card{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:16px 18px;transition:.2s;display:flex;flex-direction:column;gap:5px}
+  .cmd-card:hover{border-color:var(--line-2);background:var(--bg-3)}
+  .cmd-card .c{font-family:var(--mono);font-size:14px;color:var(--amber-2);font-weight:500}
+  .cmd-card .c .arg{color:var(--ink)}
+  .cmd-card p{font-size:13.5px;color:var(--ink-dim)}
+  .cmds-note{margin-top:18px;font-size:14.5px;color:var(--ink-dim);text-align:center}
+
+  /* ---- install ---- */
+  .install-grid{display:grid;grid-template-columns:.85fr 1.15fr;gap:30px;align-items:start}
+  .pre{background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);padding:22px}
+  .pre h3{font-size:16px;margin-bottom:16px;font-family:var(--mono);color:var(--amber-2);letter-spacing:.02em;font-weight:500}
+  .pre ol{list-style:none;counter-reset:p;display:flex;flex-direction:column;gap:15px}
+  .pre li{counter-increment:p;display:flex;gap:13px;font-size:14px;color:var(--ink-dim);line-height:1.5}
+  .pre li::before{content:counter(p);font-family:var(--mono);font-size:12px;color:var(--amber);border:1px solid var(--line-2);border-radius:50%;width:23px;height:23px;display:grid;place-items:center;flex:0 0 auto}
+  .pre li b{color:var(--ink);font-weight:600}
+  .pre a{color:var(--amber-2);border-bottom:1px solid var(--line-2)}
+  .steps{display:flex;flex-direction:column;gap:14px}
+  .term{background:#0a0807;border:1px solid var(--line-2);border-radius:12px;overflow:hidden}
+  .term-bar{display:flex;align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid var(--line);background:#120e0b}
+  .term-bar i{width:11px;height:11px;border-radius:50%;background:#2a231c}
+  .term-bar i:first-child{background:var(--amber-deep)}
+  .term-bar span{margin-left:8px;font-family:var(--mono);font-size:11.5px;color:var(--ink-dim)}
+  .term-body{padding:16px 17px;font-family:var(--mono);font-size:13px;line-height:1.85;overflow-x:auto}
+  .term-body .p{color:var(--amber)}
+  .term-body .c{color:var(--ink)}
+  .term-body .o{color:var(--ink-dim)}
+  .term-body .g{color:var(--green-2)}
+  .step-label{font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin-bottom:7px;letter-spacing:.04em}
+
+  /* ---- faq ---- */
+  .faq{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--bg-2)}
+  details{border-bottom:1px solid var(--line)}
+  details:last-child{border-bottom:none}
+  summary{padding:20px 22px;font-size:17px;font-weight:600;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:14px;letter-spacing:-0.02em;transition:.2s}
+  summary:hover{color:var(--amber-2)}
+  summary::-webkit-details-marker{display:none}
+  summary .plus{font-family:var(--mono);color:var(--amber);font-size:20px;transition:.3s;flex:0 0 auto}
+  details[open] summary .plus{transform:rotate(45deg)}
+  details p{padding:0 22px 22px;color:var(--ink-dim);font-size:15px;line-height:1.65;max-width:70ch}
+  details p b{color:var(--ink)}
+
+  /* ---- footer ---- */
+  footer{border-top:1px solid var(--line);padding:54px 0 40px;margin-top:30px;background:linear-gradient(180deg,transparent,rgba(232,137,90,.03))}
+  .foot-grid{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .foot-brand{max-width:38ch}
+  .foot-brand p{color:var(--ink-dim);font-size:14px;margin-top:14px;line-height:1.6}
+  .foot-links{display:flex;gap:54px;flex-wrap:wrap}
+  .foot-col h4{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:14px;font-weight:500}
+  .foot-col a{display:block;color:var(--ink-dim);font-size:14.5px;margin-bottom:10px;transition:.2s}
+  .foot-col a:hover{color:var(--amber-2)}
+  .disclaimer{margin-top:40px;padding-top:22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--ink-dim);line-height:1.7;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+
+  .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+  .reveal.in{opacity:1;transform:none}
+
+  /* ---- responsive ---- */
+  @media(max-width:920px){
+    .hero-grid{grid-template-columns:1fr;gap:44px}
+    .stage{order:-1}
+    .three,.checks,.cmds{grid-template-columns:1fr}
+    .allowed,.install-grid{grid-template-columns:1fr;gap:24px}
+    .nav-links{display:none}
+    .nav-links.open{display:flex;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:var(--bg-2);border-bottom:1px solid var(--line);padding:8px 0}
+    .nav-links.open a{padding:13px 28px}
+    .nav-links.open .btn{margin:8px 28px}
+    .nav-toggle{display:block}
+  }
+  @media(max-width:560px){
+    .wrap{padding:0 18px}.nav-in{padding:13px 18px}
+    th:not(:first-child),td:not(:first-child){width:auto;padding:12px 6px}
+    .term-body{font-size:11.5px}
+    .hero h1{font-size:38px}
+  }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<nav>
+  <div class="nav-in">
+    <a class="brand" href="#top"><span class="logo">›_</span> claudebot</a>
+    <button class="nav-toggle" aria-label="menu" onclick="document.getElementById('nl').classList.toggle('open')">≡</button>
+    <div class="nav-links" id="nl">
+      <a href="#how">How it works</a>
+      <a href="#allowed">Is this allowed?</a>
+      <a href="#security">Security</a>
+      <a href="#install">Install</a>
+      <a class="btn" href="https://github.com/samuelkimanikamau/claudebot" target="_blank" rel="noopener">★ GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<a id="top"></a>
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="pill"><span class="dot"></span> Open source · MIT · self-hosted</span>
+      <h1>Claude Code,<br><span class="line2">from your phone.</span></h1>
+      <p class="lede">A self-hosted Telegram bot that drives the <b>real <span class="mono">claude</span> binary</b> on your own Pro/Max subscription. No API key. No Agent SDK. No per-token bill.</p>
+
+      <div class="cmd">
+        <span class="ps1">$</span>
+        <code id="installcmd">curl -fsSL claudebot.ve.ke/install.sh | bash</code>
+        <button class="copy" onclick="cp(this,'curl -fsSL https://raw.githubusercontent.com/samuelkimanikamau/claudebot/main/scripts/install.sh | bash')">copy</button>
+      </div>
+
+      <div class="hero-cta">
+        <a class="btn btn-amber" href="#install">Get started ↘</a>
+        <a class="btn" href="https://github.com/samuelkimanikamau/claudebot" target="_blank" rel="noopener">View source</a>
+      </div>
+      <div class="hero-meta">
+        <span><span class="dot"></span> macOS &amp; Linux</span>
+        <span class="mono">needs Claude Code logged in</span>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="phone">
+        <div class="screen">
+          <div class="tg-head">
+            <div class="tg-av">C</div>
+            <div>
+              <div class="tg-name">claudebot</div>
+              <div class="tg-status"><span class="dot"></span> online · driving claude</div>
+            </div>
+          </div>
+          <div class="chat">
+            <div class="msg me d1">ship the auth fix &amp; run the tests<div class="stamp">09:41</div></div>
+            <div class="typing"><i></i><i></i><i></i></div>
+            <div class="msg bot d2"><span class="h">claudebot</span>On it — editing <span class="mono" style="color:var(--amber-2)">auth.py</span>, running the suite…<div class="row"><span class="ok">⏵</span> Bash · pytest -q</div></div>
+            <div class="msg bot d3"><span class="h">claudebot</span><b>Done.</b> Fixed the token refresh race; <span class="grn">38 passed</span> in 0.9s. Pushed to <span class="mono">main</span>.<span class="caret"></span></div>
+            <div class="msg me d4">/model opus<div class="stamp">09:42</div></div>
+            <div class="msg bot d5"><span class="h">claudebot</span>✅ model set to opus. 🆕 fresh session.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="wrap"><p class="under">under the hood: &nbsp;<b>claude -p --output-format stream-json</b>&nbsp; — the genuine binary, your login, streamed back live.</p></div>
+</header>
+
+<!-- THREE CONSTRAINTS -->
+<section id="why">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">01 / THE MOAT</span>
+      <h2>Three constraints, all satisfied.</h2>
+      <span class="sub">Other wrappers each give you some of these. claudebot is the intersection.</span>
+    </div>
+    <div class="three">
+      <div class="card reveal">
+        <div class="ic">‹/›</div>
+        <h3>The real binary</h3>
+        <p>It shells out to the genuine <span class="mono amber">claude</span> you already use — same harness, same tools, same login. Not the Agent SDK. Not an API reimplementation.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ic">∅$</div>
+        <h3>Your plan, no API bill</h3>
+        <p>Runs on your logged-in Pro/Max subscription. The OAuth token never leaves Claude Code — nothing metered, nothing to expense.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ic">⌨</div>
+        <h3>You own the UX</h3>
+        <p>Your own bot process owns Telegram. Switch models, dial effort, send a photo or a PDF, stream replies — every knob is one message away.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">02 / ARCHITECTURE</span>
+      <h2>It owns the loop.</h2>
+      <span class="sub">One persistent <span class="mono">claude</span> per chat, kept warm — driven over its headless stream-json protocol.</span>
+    </div>
+    <div class="flow reveal">
+      <div class="flow-diagram">
+        <div class="node"><b>Telegram</b><span>your phone</span></div>
+        <span class="arrow">⇄</span>
+        <div class="node accent"><b>claudebot</b><span>your bot process</span></div>
+        <span class="arrow">⇄</span>
+        <div class="node"><b>claude -p</b><span>--output-format stream-json</span></div>
+        <span class="arrow">→</span>
+        <div class="node accent"><b>your machine</b><span>real tools · your login</span></div>
+      </div>
+      <div class="flow-note"><span class="grn">⏵</span> Warm child per chat · <span class="amber">--resume</span> across restarts · replies stream back token-by-token · token stays inside Claude Code.</div>
+    </div>
+  </div>
+</section>
+
+<!-- IS THIS ALLOWED -->
+<section id="allowed">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">03 / TRUST</span>
+      <h2>Is this allowed?</h2>
+      <span class="sub">The honest answer — yes, with one bright line.</span>
+    </div>
+    <div class="allowed">
+      <div class="prose reveal">
+        <p>Anthropic's <b>“no third-party harness”</b> rule is about <b>where your subscription OAuth token is used</b>: don't feed it to a client that isn't Claude Code — the Agent SDK, Cline, Cursor, raw API calls, an LLM gateway.</p>
+        <p>claudebot <b>never touches the token</b>. It pipes text into the genuine <span class="mono amber">claude</span> process and reads JSON back; the token stays inside Claude Code, exactly as designed. Anthropic documents <span class="mono">claude -p</span> on subscriptions, ships <span class="mono">claude setup-token</span> for scripts, and (from 2026-06-15) gives <span class="mono">claude -p</span> a dedicated subscription credit.</p>
+        <p class="hedge">This is policy, not law — Anthropic can tighten it, and headless/channels are still evolving. Use your own judgement.</p>
+      </div>
+      <div class="lines reveal">
+        <div class="ln"><span class="x">01</span><div><b>Single-user.</b><p>Gate it to your own Telegram ID. Don't let others prompt through your plan — that's account sharing.</p></div></div>
+        <div class="ln"><span class="x">02</span><div><b>Never extract the token.</b><p>Let the binary own its auth. No lifting creds to call the API yourself.</p></div></div>
+        <div class="ln"><span class="x">03</span><div><b>Don't hammer it 24/7.</b><p>Normal interactive-scale chat is fine. Pathological looping isn't.</p></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECURITY -->
+<section id="security">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">04 / SECURITY POSTURE</span>
+      <h2>Treat it like a root shell.</h2>
+      <span class="sub">Because it is one — and it's built to be handled that way.</span>
+    </div>
+    <div class="sec-ask reveal">
+      <span class="warn">⚠️</span>
+      <p><b>By default, Claude runs any tool — including Bash — without asking.</b> Run claudebot only on a machine you trust, scoped to a working directory, gated to your own Telegram ID. The bot is the owner's remote shell, not a public service.</p>
+    </div>
+    <div class="checks">
+      <div class="check reveal"><span class="tick">✓</span><div><b>Fail-closed allowlist</b><p>Empty list = locked to nobody. DM-only handlers; group &amp; channel traffic ignored.</p></div></div>
+      <div class="check reveal"><span class="tick">✓</span><div><b>Content-injection guard</b><p>A default preamble tells Claude to treat attached &amp; fetched content as data, never instructions.</p></div></div>
+      <div class="check reveal"><span class="tick">✓</span><div><b>Secret hygiene</b><p>Bot token stripped from the child env; <span class="mono">.env</span> &amp; state are <span class="mono">chmod 600</span>; chat errors are generic.</p></div></div>
+      <div class="check reveal"><span class="tick">✓</span><div><b>Bounded &amp; single</b><p>Per-turn timeout so nothing wedges; one poller per host via an exclusive lock.</p></div></div>
+      <div class="check reveal"><span class="tick">✓</span><div><b>Smoke-gated updates</b><p><span class="mono">claudebot update</span> runs the test suite before a new build goes live — and auto-rolls-back on failure.</p></div></div>
+      <div class="check reveal"><span class="tick">✓</span><div><b>Auditable &amp; open</b><p>~1.5k lines of readable Python, MIT-licensed. Read every line that touches your machine.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARISON -->
+<section id="compare">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">05 / THE FIELD</span>
+      <h2>How it compares.</h2>
+      <span class="sub">Honest, verifiable distinctions — not vague “better”.</span>
+    </div>
+    <div class="tablewrap reveal">
+      <table>
+        <thead><tr><th>Approach</th><th>Real binary</th><th>No API key</th><th>You own the UX</th><th>Always-alive</th></tr></thead>
+        <tbody>
+          <tr class="me-row"><td><div class="rowname">claudebot <small>headless stream-json</small></div></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
+          <tr><td><div class="rowname">Official Telegram plugin <small>claude-plugins-official</small></div></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="meh">fixed UX</span></td><td><span class="y">✓</span></td></tr>
+          <tr><td><div class="rowname">claude-code-telegram <small>RichardAtCT</small></div></td><td><span class="meh">via SDK</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
+          <tr><td><div class="rowname">PTY / TUI scraping</div></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="no">brittle</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="tbl-note">The official plugin is genuinely great if you want zero-config and don't need custom UX. claudebot is for when you want to own the conversation loop.</p>
+  </div>
+</section>
+
+<!-- COMMANDS -->
+<section id="commands">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">06 / CONTROL</span>
+      <h2>Drive it from your phone.</h2>
+      <span class="sub">Every Claude Code knob, one message away.</span>
+    </div>
+    <div class="cmds">
+      <div class="cmd-card reveal"><span class="c">/model <span class="arg">opus</span></span><p>Switch models mid-conversation.</p></div>
+      <div class="cmd-card reveal"><span class="c">/effort <span class="arg">max</span></span><p>Crank thinking for a hard problem.</p></div>
+      <div class="cmd-card reveal"><span class="c">/mode <span class="arg">acceptEdits</span></span><p>Tighten what runs without asking.</p></div>
+      <div class="cmd-card reveal"><span class="c">/cd <span class="arg">~/work/app</span></span><p>Switch projects on the fly.</p></div>
+      <div class="cmd-card reveal"><span class="c">📷 / 📄</span><p>Send a photo or document — Claude reads it.</p></div>
+      <div class="cmd-card reveal"><span class="c">/retry · /stop · /new · /status</span><p>Resend, abort, reset, inspect.</p></div>
+    </div>
+    <p class="cmds-note">Tweaks are saved <b class="amber">per-chat</b> and survive restarts. Because claudebot owns Telegram, none of this needs a redeploy.</p>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">07 / INSTALL</span>
+      <h2>Running in 30 seconds.</h2>
+      <span class="sub">One command — after a two-minute checklist so nothing fails silently.</span>
+    </div>
+    <div class="install-grid">
+      <div class="pre reveal">
+        <h3>// before you start</h3>
+        <ol>
+          <li><div><b>Claude Code logged in</b><br><span class="mono" style="font-size:12px">claude auth status</span> → loggedIn: true. Pro / Max / Team / Enterprise.</div></li>
+          <li><div><b>A bot token</b> from <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a></div></li>
+          <li><div><b>Your numeric ID</b> from <a href="https://t.me/userinfobot" target="_blank" rel="noopener">@userinfobot</a></div></li>
+        </ol>
+      </div>
+      <div class="steps reveal">
+        <div>
+          <div class="step-label">// 1 — install</div>
+          <div class="cmd" style="margin-top:0;max-width:none">
+            <span class="ps1">$</span>
+            <code>curl -fsSL claudebot.ve.ke/install.sh | bash</code>
+            <button class="copy" onclick="cp(this,'curl -fsSL https://raw.githubusercontent.com/samuelkimanikamau/claudebot/main/scripts/install.sh | bash')">copy</button>
+          </div>
+        </div>
+        <div>
+          <div class="step-label">// 2 — the wizard asks you</div>
+          <div class="term">
+            <div class="term-bar"><i></i><i></i><i></i><span>claudebot setup</span></div>
+            <div class="term-body"><span class="o">?</span> <span class="c">Bot token</span> <span class="o">›</span> <span class="g">123456:AA…</span><br><span class="o">?</span> <span class="c">Allowed Telegram user ID</span> <span class="o">›</span> <span class="g">5538…</span><br><span class="o">?</span> <span class="c">Working directory</span> <span class="o">›</span> <span class="g">~/work</span><br><span class="o">?</span> <span class="c">Permission mode</span> <span class="o">›</span> <span class="g">bypassPermissions</span><br><span class="g">✓ Saved ~/.claudebot/.env</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="step-label">// 3 — verify &amp; keep it always-on</div>
+          <div class="term">
+            <div class="term-bar"><i></i><i></i><i></i><span>zsh</span></div>
+            <div class="term-body"><span class="p">$</span> <span class="c">claudebot doctor</span> <span class="o"># checks auth + token + config</span><br><span class="p">$</span> <span class="c">claudebot run</span> <span class="o"># foreground</span><br><span class="p">$</span> <span class="c">claudebot service install</span> <span class="o"># launchd / systemd, always-on</span></div>
+          </div>
+        </div>
+        <p style="font-family:var(--mono);font-size:12.5px;color:var(--ink-dim)">Linux: run <span class="code" style="font-size:12px">loginctl enable-linger $USER</span> once so it survives logout.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">08 / FAQ</span>
+      <h2>Single-user, by design.</h2>
+    </div>
+    <div class="faq reveal">
+      <details open><summary>Can I add my team? <span class="plus">+</span></summary><p><b>No — and that's deliberate.</b> Letting others prompt through your subscription is account sharing (a ban risk), and it hands them a shell on your machine. One subscription, one trusted machine, one Telegram ID. A real multi-user product needs per-user credentials, quotas, and isolation — that's a different project.</p></details>
+      <details><summary>Is there a hosted version? <span class="plus">+</span></summary><p><b>No, by design.</b> claudebot runs on <b>your</b> subscription, so there's nothing to host without sharing accounts. That's a feature, not a gap — it's why there's no per-token bill. Self-host it in 30 seconds instead.</p></details>
+      <details><summary>What does it cost? <span class="plus">+</span></summary><p>Nothing beyond the Claude plan you already pay for. claudebot is <b>free and MIT-licensed</b>. No API metering, no subscription, no upsell.</p></details>
+      <details><summary>Which platforms? <span class="plus">+</span></summary><p><b>macOS</b> (launchd) and <b>Linux</b> (systemd --user). Both keep the bot always-on with auto-restart. You'll need Claude Code installed and logged in, and Python 3.10+.</p></details>
+      <details><summary>Will this get my account banned? <span class="plus">+</span></summary><p>The risk is in <i>how</i> you use it, not the tool. claudebot keeps the token inside the genuine <span class="mono">claude</span> binary — the supported path. Stay single-user, never extract the token, and don't run pathological 24/7 loops. See <a href="#allowed" style="color:var(--amber-2)">“Is this allowed?”</a> for the honest detail.</p></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top"><span class="logo">›_</span> claudebot</a>
+        <p>Claude Code, from your phone. The real binary, on your own plan — open source and self-hosted.</p>
+      </div>
+      <div class="foot-links">
+        <div class="foot-col">
+          <h4>Project</h4>
+          <a href="https://github.com/samuelkimanikamau/claudebot" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/samuelkimanikamau/claudebot/issues" target="_blank" rel="noopener">Issues</a>
+          <a href="https://github.com/samuelkimanikamau/claudebot#readme" target="_blank" rel="noopener">Docs</a>
+          <a href="https://github.com/sponsors/samuelkimanikamau" target="_blank" rel="noopener">Sponsor</a>
+        </div>
+        <div class="foot-col">
+          <h4>Jump to</h4>
+          <a href="#why">Why</a>
+          <a href="#allowed">Is this allowed?</a>
+          <a href="#security">Security</a>
+          <a href="#install">Install</a>
+        </div>
+      </div>
+    </div>
+    <div class="disclaimer">
+      <span>Independent open-source project. Not affiliated with or endorsed by Anthropic. “Claude” and “Claude Code” are trademarks of Anthropic.</span>
+      <span>MIT · built by <a href="https://ve.ke" style="color:var(--amber-2)">Samuel Kimani</a></span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  function cp(btn, text){
+    navigator.clipboard.writeText(text).then(()=>{
+      const old=btn.textContent; btn.textContent='copied ✓'; btn.classList.add('ok');
+      setTimeout(()=>{btn.textContent=old; btn.classList.remove('ok')},1600);
+    }).catch(()=>{btn.textContent='⌘C';});
+  }
+  // scroll reveal
+  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.reveal').forEach((el,i)=>{el.style.transitionDelay=(Math.min(i%3,2)*0.08)+'s';io.observe(el)});
+  // close mobile menu on nav click
+  document.querySelectorAll('#nl a').forEach(a=>a.addEventListener('click',()=>document.getElementById('nl').classList.remove('open')));
+</script>
+</body>
+</html>
