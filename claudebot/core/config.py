@@ -26,6 +26,9 @@ class Settings(BaseSettings):
         env_file=str(env_file()),
         env_file_encoding="utf-8",
         extra="ignore",
+        # Re-run field validators on runtime assignment (e.g. /mode) so a bad value
+        # can't be written into a live Settings, even via the chat commands.
+        validate_assignment=True,
     )
 
     # --- Telegram -----------------------------------------------------------

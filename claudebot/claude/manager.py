@@ -9,23 +9,34 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from pathlib import Path
 
 from claudebot.claude.session import ClaudeSession
 from claudebot.core.config import Settings
 from claudebot.core.logging import get_logger
-from claudebot.core.paths import ensure_state_dir, sessions_file
+from claudebot.core.paths import ensure_state_dir, overrides_file, sessions_file
 
 log = get_logger("claudebot.manager")
 
 
 class SessionManager:
     def __init__(self, settings: Settings) -> None:
-        self.settings = settings
+        self.settings = settings  # base/default; per-chat copies layer on top
         self._sessions: dict[int, ClaudeSession] = {}
         self._map: dict[str, str] = self._load_map()
+        self._overrides: dict[str, dict] = self._load_overrides()
         self._lock = asyncio.Lock()
         self._idle_task: asyncio.Task | None = None
+
+    def _session_settings(self, chat_id: int) -> Settings:
+        """A per-chat copy of the base settings with this chat's overrides applied.
+
+        Each ClaudeSession gets its OWN Settings, so a runtime change in one chat
+        (/model, /timeout, …) never bleeds into another chat.
+        """
+        override = self._overrides.get(str(chat_id))
+        return self.settings.model_copy(update=override or {})
 
     # --- lookup -------------------------------------------------------------
 
@@ -38,7 +49,7 @@ class SessionManager:
             known_id = self._map.get(str(chat_id))
             session = ClaudeSession(
                 chat_id,
-                self.settings,
+                self._session_settings(chat_id),
                 session_id=known_id,
                 is_new=known_id is None,
             )
@@ -55,7 +66,7 @@ class SessionManager:
                 await old.stop()
             session = ClaudeSession(
                 chat_id,
-                self.settings,
+                self._session_settings(chat_id),
                 session_id=None,
                 is_new=True,
                 working_dir=working_dir,
@@ -64,10 +75,23 @@ class SessionManager:
             self._remember(chat_id, session.session_id)
             return session
 
+    def persist_override(self, chat_id: int, field: str, value: object) -> None:
+        """Record a per-chat runtime override so it survives a restart."""
+        override = self._overrides.setdefault(str(chat_id), {})
+        if value is None:
+            override.pop(field, None)
+        else:
+            override[field] = value
+        if not override:
+            self._overrides.pop(str(chat_id), None)
+        self._save_overrides()
+
     # --- lifecycle ----------------------------------------------------------
 
     def start_background(self) -> None:
-        if self._idle_task is None and self.settings.idle_timeout > 0:
+        # Always run the loop; it reads each session's LIVE idle_timeout, so /idle
+        # takes effect even if the bot started with idle eviction disabled.
+        if self._idle_task is None:
             self._idle_task = asyncio.create_task(self._idle_loop())
 
     async def shutdown(self) -> None:
@@ -79,16 +103,15 @@ class SessionManager:
         )
 
     async def _idle_loop(self) -> None:
-        import time
-
-        timeout = self.settings.idle_timeout
         try:
             while True:
                 await asyncio.sleep(60)
                 now = time.monotonic()
                 for session in list(self._sessions.values()):
+                    timeout = session.settings.idle_timeout  # live, per-chat
                     if (
-                        session.is_alive
+                        timeout > 0
+                        and session.is_alive
                         and not session.busy
                         and (now - session.last_activity) > timeout
                     ):
@@ -123,5 +146,28 @@ class SessionManager:
             tmp.write_text(json.dumps(self._map, indent=2), "utf-8")
             tmp.replace(path)
             path.chmod(0o600)  # session ids are not world-readable
+        except OSError as exc:
+            log.warning("could not write %s: %s", path, exc)
+
+    def _load_overrides(self) -> dict[str, dict]:
+        path = overrides_file()
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text("utf-8"))
+            if isinstance(data, dict):
+                return {str(k): dict(v) for k, v in data.items() if isinstance(v, dict)}
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            log.warning("could not read %s: %s", path, exc)
+        return {}
+
+    def _save_overrides(self) -> None:
+        ensure_state_dir()
+        path = overrides_file()
+        tmp = path.with_suffix(".json.tmp")
+        try:
+            tmp.write_text(json.dumps(self._overrides, indent=2), "utf-8")
+            tmp.replace(path)
+            path.chmod(0o600)
         except OSError as exc:
             log.warning("could not write %s: %s", path, exc)

@@ -72,6 +72,15 @@ _COMMANDS = [
 
 _EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 _SESSION_RESTART_OPTIONS = {"model", "effort", "mode"}
+# Runtime command key -> the Settings field it writes (used to persist per-chat).
+_FIELD_FOR = {
+    "model": "model",
+    "effort": "effort",
+    "mode": "permission_mode",
+    "cost": "show_cost",
+    "timeout": "turn_timeout",
+    "idle": "idle_timeout",
+}
 _CLEAR_VALUES = {"default", "auto", "none", "off"}
 _TRUE_VALUES = {"1", "true", "yes", "y", "on", "enable", "enabled"}
 _FALSE_VALUES = {"0", "false", "no", "n", "off", "disable", "disabled"}
@@ -304,27 +313,30 @@ class TelegramBridge:
         if not await self._guard(update):
             return
         session = await self.manager.get(update.effective_chat.id)
+        s = session.settings
         alive = "running" if session.is_alive else "idle (resumes on next message)"
         await update.effective_message.reply_text(
             "claudebot status\n"
             f"• session: {session.session_id}\n"
             f"• state: {alive}\n"
             f"• working dir: {session.working_dir}\n"
-            f"• model: {self.settings.model or 'default'}\n"
-            f"• effort: {self.settings.effort or 'default'}\n"
-            f"• permission mode: {self.settings.permission_mode}\n"
-            f"• turn timeout: {self.settings.turn_timeout}s"
+            f"• model: {s.model or 'default'}\n"
+            f"• effort: {s.effort or 'default'}\n"
+            f"• permission mode: {s.permission_mode}\n"
+            f"• turn timeout: {s.turn_timeout}s"
         )
 
     async def _cmd_config(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._guard(update):
             return
-        await update.effective_message.reply_text(_format_config(self.settings))
+        session = await self.manager.get(update.effective_chat.id)
+        await update.effective_message.reply_text(_format_config(session.settings))
 
     async def _cmd_tools(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._guard(update):
             return
-        await update.effective_message.reply_text(_format_tools(self.settings))
+        session = await self.manager.get(update.effective_chat.id)
+        await update.effective_message.reply_text(_format_tools(session.settings))
 
     async def _cmd_model(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await self._cmd_runtime(update, ctx, "model")
@@ -347,19 +359,24 @@ class TelegramBridge:
     async def _cmd_runtime(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, key: str) -> None:
         if not await self._guard(update):
             return
+        chat_id = update.effective_chat.id
         args = list(ctx.args or [])
-        if key in _SESSION_RESTART_OPTIONS and args:
-            session = await self.manager.get(update.effective_chat.id)
-            if session.busy:
-                await update.effective_message.reply_text(
-                    "⏳ Still working on your previous message — send /stop before changing "
-                    f"/{key}."
-                )
-                return
-        changed, needs_fresh_session, message = _apply_runtime_setting(self.settings, key, args)
-        if changed and needs_fresh_session:
-            await self.manager.reset(update.effective_chat.id)
-            message += "\n🆕 Started a fresh conversation with the new setting."
+        session = await self.manager.get(chat_id)
+        if key in _SESSION_RESTART_OPTIONS and args and session.busy:
+            await update.effective_message.reply_text(
+                "⏳ Still working on your previous message — send /stop before changing "
+                f"/{key}."
+            )
+            return
+        # Apply to THIS chat's settings only (no cross-chat bleed) and persist it.
+        changed, needs_fresh_session, message = _apply_runtime_setting(session.settings, key, args)
+        if changed:
+            field = _FIELD_FOR.get(key)
+            if field is not None:
+                self.manager.persist_override(chat_id, field, getattr(session.settings, field))
+            if needs_fresh_session:
+                await self.manager.reset(chat_id)
+                message += "\n🆕 Started a fresh conversation with the new setting."
         await update.effective_message.reply_text(message)
 
     async def _cmd_cd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -435,7 +452,7 @@ class TelegramBridge:
                 )
             self._cleanup_files(image_paths)
             return
-        streamer = Streamer(ctx.bot, chat_id, self.settings)
+        streamer = Streamer(ctx.bot, chat_id, session.settings)
         try:
             async with _typing(ctx.bot, chat_id):
                 try:
@@ -450,7 +467,7 @@ class TelegramBridge:
             if result.is_error:
                 with contextlib.suppress(TelegramError):
                     await ctx.bot.send_message(chat_id, "⚠️ Claude reported an error for that turn.")
-            if self.settings.show_cost and result.cost:
+            if session.settings.show_cost and result.cost:
                 with contextlib.suppress(TelegramError):
                     await ctx.bot.send_message(chat_id, f"💸 cost: ${result.cost:.4f}")
         finally:

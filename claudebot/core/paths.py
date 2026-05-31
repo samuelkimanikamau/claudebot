@@ -30,6 +30,11 @@ def sessions_file() -> Path:
     return state_dir() / "sessions.json"
 
 
+def overrides_file() -> Path:
+    """Per-chat runtime setting overrides (set via /model, /timeout, … in chat)."""
+    return state_dir() / "overrides.json"
+
+
 def log_dir() -> Path:
     return state_dir() / "logs"
 
