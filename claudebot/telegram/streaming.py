@@ -64,6 +64,7 @@ class Streamer:
         self._last_preview: str | None = None
         self._last_edit = 0.0
         self._finalized = False
+        self._preview_task: asyncio.Task | None = None
 
     # --- live streaming (plain text) ----------------------------------------
 
@@ -74,21 +75,47 @@ class Streamer:
             delta = events.partial_text(event)
             if delta:
                 self._buffer += delta
-                await self._preview()
+                self._schedule_preview()
         elif not self.stream_partials and events.is_assistant(event):
             txt = events.assistant_text(event)
             if txt:
                 self._buffer += txt
-                await self._preview()  # respect edit_interval; finalize() lays down the truth
+                self._schedule_preview()  # background worker respects edit_interval
 
-    async def _preview(self, force: bool = False) -> None:
-        now = time.monotonic()
-        if not force and (now - self._last_edit) < self.edit_interval:
+    def _schedule_preview(self) -> None:
+        """Kick a background preview edit without blocking Claude stdout reads."""
+        if self._finalized:
             return
+        if self._preview_task is None or self._preview_task.done():
+            self._preview_task = asyncio.create_task(self._preview_worker())
+
+    async def _preview_worker(self) -> None:
+        """Throttle live Telegram edits independently of Claude event consumption."""
+        try:
+            while not self._finalized:
+                delay = self.edit_interval - (time.monotonic() - self._last_edit)
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                await self._preview_now()
+                if self._finalized or self._preview_text() == self._last_preview:
+                    break
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - preview failures must never break turns
+            log.debug("preview worker error: %s", exc)
+        finally:
+            if self._preview_task is asyncio.current_task():
+                self._preview_task = None
+
+    def _preview_text(self) -> str:
+        text = self._buffer
+        return text if len(text) <= _HARD_LIMIT else "…" + text[-(_HARD_LIMIT - 1):]
+
+    async def _preview_now(self) -> None:
         text = self._buffer
         if not text.strip():
             return
-        shown = text if len(text) <= _HARD_LIMIT else "…" + text[-(_HARD_LIMIT - 1):]
+        shown = self._preview_text()
         if shown == self._last_preview:
             return
         try:
@@ -100,7 +127,7 @@ class Streamer:
                     shown, chat_id=self.chat_id, message_id=self._live_id
                 )
             self._last_preview = shown
-            self._last_edit = now
+            self._last_edit = time.monotonic()
         except RetryAfter as exc:
             await asyncio.sleep(exc.retry_after + 0.5)
         except BadRequest:
@@ -108,10 +135,20 @@ class Streamer:
         except TelegramError as exc:
             log.debug("preview error: %s", exc)
 
+    async def _cancel_preview(self) -> None:
+        task, self._preview_task = self._preview_task, None
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
     # --- finalization (formatted, with plain fallback) ----------------------
 
     async def finalize(self, text: str) -> None:
         self._finalized = True
+        await self._cancel_preview()
         raw = (text or "").strip() or "(no reply)"
         chunks = chunk_text(raw)
         self._live_id = await self._send(chunks[0], edit_id=self._live_id)
@@ -153,6 +190,7 @@ class Streamer:
 
     async def error(self, message: str) -> None:
         self._finalized = True
+        await self._cancel_preview()
         try:
             if self._live_id is not None:
                 await self.bot.edit_message_text(
