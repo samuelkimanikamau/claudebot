@@ -55,3 +55,13 @@ the token never leaves Claude Code. Anthropic supports this path explicitly
 `claude -p` subscription credit from 2026-06-15). **The lines not to cross:**
 don't extract the token to call the API yourself, keep it single-user, don't
 hammer it 24/7. See README → "Is this allowed?".
+
+## Multiple bots (instances)
+
+The security audit flagged that the service layer assumed one bot per host (fixed
+unit/label names). Resolved: a bot is now an **instance**. `--instance <name>`
+redirects all state to `~/.claudebot/instances/<name>` and names the service
+`claudebot-<name>` / `ke.ve.claudebot.<name>`, so several bots coexist without
+colliding (each takes its own poller lock and needs its own BotFather token). This
+is still **single-user** — multiple *bots* owned by one person, not multiple
+*people* on one subscription. See README → "Running more than one bot".

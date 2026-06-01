@@ -39,6 +39,8 @@ claudebot doctor               # check claude auth + token + config
 claudebot run                  # foreground
 claudebot service install      # systemd --user (Linux) / launchd (macOS)
 claudebot update               # pull + reinstall into the SERVICE venv + restart
+claudebot instances            # list your bots (default + named)
+claudebot --instance work …    # operate a SECOND bot (own state dir, lock, service)
 
 pytest -q                      # unit tests
 ruff check claudebot           # lint
@@ -51,11 +53,11 @@ Smoke-test the driver against the real binary (no Telegram token needed):
 
 ```
 claudebot/
-├── cli.py              # argparse entry: run / setup / doctor / service
+├── cli.py              # argparse entry: run / setup / doctor / service / update / instances (+ --instance)
 ├── wizard.py           # interactive onboarding, writes ~/.claudebot/.env
 ├── core/
 │   ├── config.py       # pydantic-settings Settings (env_prefix CLAUDEBOT_)
-│   ├── paths.py        # ~/.claudebot state-dir resolution
+│   ├── paths.py        # ~/.claudebot state-dir resolution (+ instances/<name>)
 │   └── logging.py
 ├── claude/             # ← the engine
 │   ├── events.py       # parse stream-json NDJSON into typed events
@@ -69,6 +71,15 @@ claudebot/
     ├── systemd.py      # ~/.config/systemd/user/claudebot.service (Restart=always)
     └── launchd.py      # ~/Library/LaunchAgents/ke.ve.claudebot.plist (KeepAlive)
 ```
+
+### Multiple bots (instances)
+
+`--instance <name>` sets `CLAUDEBOT_STATE_DIR` early in `main()`, so all state
+(config, sessions, lock, logs) redirects to `~/.claudebot/instances/<name>`, and the
+service is named `claudebot-<name>` / `ke.ve.claudebot.<name>`. The **default
+(un-named) bot keeps `~/.claudebot` and the names `claudebot` / `ke.ve.claudebot`** —
+never rename those or existing installs break. `load_settings()` resolves the `.env`
+at call time so it follows the instance.
 
 ### Key invariants (don't regress these)
 
