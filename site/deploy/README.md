@@ -20,14 +20,14 @@ From this repo (the `site/` dir is the web root; the `deploy/` subfolder is excl
 
 ```bash
 rsync -avz --delete --exclude 'deploy' \
-  site/ root@157.173.124.117:/var/www/claudebot.ve.ke/
+  site/ vutia-prod:/var/www/claudebot.ve.ke/
 ```
 
 ## 3. nginx vhost
 
 ```bash
-scp site/deploy/claudebot.ve.ke.conf root@157.173.124.117:/etc/nginx/sites-available/
-ssh root@157.173.124.117 '
+scp site/deploy/claudebot.ve.ke.conf vutia-prod:/etc/nginx/sites-available/
+ssh vutia-prod '
   ln -sf /etc/nginx/sites-available/claudebot.ve.ke.conf /etc/nginx/sites-enabled/ &&
   nginx -t && systemctl reload nginx'
 ```
@@ -35,7 +35,7 @@ ssh root@157.173.124.117 '
 ## 4. TLS (Let's Encrypt)
 
 ```bash
-ssh root@157.173.124.117 'certbot --nginx -d claudebot.ve.ke --non-interactive --agree-tos -m samuel@ve.ke'
+ssh vutia-prod 'certbot --nginx -d claudebot.ve.ke --non-interactive --agree-tos -m samuel@ve.ke'
 ```
 
 certbot rewrites the vhost to add the `443` block and an `80 → 443` redirect, and
