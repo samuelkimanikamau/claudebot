@@ -11,13 +11,14 @@ from claudebot.service import ServiceManager
 
 log = get_logger("claudebot.service.systemd")
 
-UNIT_NAME = "claudebot.service"
-
-
 class SystemdService(ServiceManager):
     @property
+    def unit_name(self) -> str:
+        return f"{self.name}.service"
+
+    @property
     def unit_path(self) -> Path:
-        return Path.home() / ".config/systemd/user" / UNIT_NAME
+        return Path.home() / ".config/systemd/user" / self.unit_name
 
     # --- unit text ----------------------------------------------------------
 
@@ -57,30 +58,30 @@ WantedBy=default.target
         self.unit_path.write_text(self._render_unit(), "utf-8")
         log.info("wrote %s", self.unit_path)
         self._systemctl("daemon-reload")
-        self._systemctl("enable", "--now", UNIT_NAME)
-        print(f"✅ installed and started {UNIT_NAME}")
+        self._systemctl("enable", "--now", self.unit_name)
+        print(f"✅ installed and started {self.unit_name}")
         self._linger_hint()
 
     def uninstall(self) -> None:
-        self._systemctl("disable", "--now", UNIT_NAME, check=False)
+        self._systemctl("disable", "--now", self.unit_name, check=False)
         if self.unit_path.exists():
             self.unit_path.unlink()
         self._systemctl("daemon-reload")
         self._systemctl("reset-failed", check=False)
-        print(f"🗑️  removed {UNIT_NAME}")
+        print(f"🗑️  removed {self.unit_name}")
 
     def start(self) -> None:
-        self._systemctl("start", UNIT_NAME)
+        self._systemctl("start", self.unit_name)
 
     def stop(self) -> None:
-        self._systemctl("stop", UNIT_NAME)
+        self._systemctl("stop", self.unit_name)
 
     def restart(self) -> None:
-        self._systemctl("restart", UNIT_NAME)
+        self._systemctl("restart", self.unit_name)
 
     def status(self) -> str:
         result = subprocess.run(
-            ["systemctl", "--user", "status", UNIT_NAME, "--no-pager"],
+            ["systemctl", "--user", "status", self.unit_name, "--no-pager"],
             capture_output=True,
             text=True,
         )
@@ -95,9 +96,9 @@ WantedBy=default.target
         return None
 
     def logs(self, follow: bool = False) -> None:
-        cmd = ["journalctl", "--user", "-u", UNIT_NAME, "-n", "200", "--no-pager"]
+        cmd = ["journalctl", "--user", "-u", self.unit_name, "-n", "200", "--no-pager"]
         if follow:
-            cmd = ["journalctl", "--user", "-u", UNIT_NAME, "-n", "200", "-f"]
+            cmd = ["journalctl", "--user", "-u", self.unit_name, "-n", "200", "-f"]
         subprocess.run(cmd)
 
     # --- helpers ------------------------------------------------------------

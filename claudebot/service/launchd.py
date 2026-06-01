@@ -14,13 +14,14 @@ from claudebot.service import ServiceManager
 
 log = get_logger("claudebot.service.launchd")
 
-LABEL = "ke.ve.claudebot"
-
-
 class LaunchdService(ServiceManager):
     @property
+    def label(self) -> str:
+        return "ke.ve.claudebot" if not self.instance else f"ke.ve.claudebot.{self.instance}"
+
+    @property
     def plist_path(self) -> Path:
-        return Path.home() / "Library/LaunchAgents" / f"{LABEL}.plist"
+        return Path.home() / "Library/LaunchAgents" / f"{self.label}.plist"
 
     @property
     def _domain_target(self) -> str:
@@ -28,7 +29,7 @@ class LaunchdService(ServiceManager):
 
     @property
     def _service_target(self) -> str:
-        return f"gui/{os.getuid()}/{LABEL}"
+        return f"gui/{os.getuid()}/{self.label}"
 
     # --- plist --------------------------------------------------------------
 
@@ -46,7 +47,7 @@ class LaunchdService(ServiceManager):
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>{LABEL}</string>
+    <string>{self.label}</string>
     <key>ProgramArguments</key>
     <array>
 {args}    </array>
@@ -78,13 +79,13 @@ class LaunchdService(ServiceManager):
         self._launchctl("bootstrap", self._domain_target, str(self.plist_path))
         self._launchctl("enable", self._service_target, check=False)
         self._launchctl("kickstart", "-k", self._service_target, check=False)
-        print(f"✅ installed and started {LABEL}")
+        print(f"✅ installed and started {self.label}")
 
     def uninstall(self) -> None:
         self._launchctl("bootout", self._service_target, check=False)
         if self.plist_path.exists():
             self.plist_path.unlink()
-        print(f"🗑️  removed {LABEL}")
+        print(f"🗑️  removed {self.label}")
 
     def start(self) -> None:
         self._launchctl("kickstart", self._service_target)
@@ -103,7 +104,7 @@ class LaunchdService(ServiceManager):
             text=True,
         )
         if result.returncode != 0:
-            return f"{LABEL}: not loaded (run `claudebot service install`)"
+            return f"{self.label}: not loaded (run `claudebot service install`)"
         return result.stdout
 
     def installed_python(self) -> str | None:

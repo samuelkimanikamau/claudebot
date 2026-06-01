@@ -11,7 +11,37 @@ Everything lives under ``~/.claudebot`` (override with ``CLAUDEBOT_STATE_DIR``):
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
+
+# A second/third bot is an "instance": its own state dir, config, lock, and service.
+# The default (un-named) bot lives at ~/.claudebot; named instances live under
+# ~/.claudebot/instances/<name>.
+_INSTANCE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,30}$")
+
+
+def validate_instance_name(name: str) -> str:
+    if not _INSTANCE_RE.match(name):
+        raise ValueError(
+            f"invalid instance name {name!r}: lowercase letters/digits/'-'/'_', "
+            "starting alphanumeric, max 31 chars."
+        )
+    return name
+
+
+def instances_root() -> Path:
+    return Path.home() / ".claudebot" / "instances"
+
+
+def instance_state_dir(name: str) -> Path:
+    return instances_root() / name
+
+
+def list_instances() -> list[str]:
+    root = instances_root()
+    if not root.exists():
+        return []
+    return sorted(p.name for p in root.iterdir() if p.is_dir())
 
 
 def state_dir() -> Path:

@@ -101,6 +101,25 @@ On Linux the unit is `Restart=always`; run `loginctl enable-linger $USER` once s
 it survives logout/reboot (the installer reminds you). On macOS it's a launchd
 LaunchAgent with `KeepAlive` + `RunAtLoad`.
 
+## Running more than one bot
+
+Each bot is an **instance** with its own state, config, lock, and service. Add a
+second bot with `--instance <name>` — the wizard and every command stay interactive:
+
+```bash
+claudebot --instance work setup            # wizard for a 2nd bot (its own token + allowlist)
+claudebot --instance work doctor
+claudebot --instance work run              # foreground, or…
+claudebot --instance work service install  # …its own always-on service
+
+claudebot instances                        # list all your bots
+```
+
+Your main bot is unchanged (`claudebot setup`, `claudebot run`, …). A named
+instance lives at `~/.claudebot/instances/<name>/`, takes its own poller lock, and
+installs as a separate service (`claudebot-work` / `ke.ve.claudebot.work`), so the
+two never collide. Each instance needs its **own** BotFather token.
+
 ## Updating
 
 ```bash

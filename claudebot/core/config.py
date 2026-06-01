@@ -141,5 +141,9 @@ def _split_csv(v: object) -> object:
 
 
 def load_settings() -> Settings:
-    """Construct Settings, surfacing a friendly hint when the token is missing."""
-    return Settings()  # type: ignore[call-arg]
+    """Construct Settings, surfacing a friendly hint when the token is missing.
+
+    Resolves the ``.env`` path at call time so a ``--instance`` (which sets
+    ``CLAUDEBOT_STATE_DIR``) reads that instance's config, not the default.
+    """
+    return Settings(_env_file=str(env_file()))  # type: ignore[call-arg]

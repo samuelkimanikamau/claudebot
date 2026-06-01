@@ -87,8 +87,10 @@ def _check_claude() -> None:
         )
 
 
-def run() -> int:
-    print(f"\n{C_BOLD}{C_CYAN}claudebot setup{C_RESET}")
+def run(instance: str | None = None) -> int:
+    flag = f"--instance {instance} " if instance else ""
+    suffix = f"  ·  instance: {instance}" if instance else ""
+    print(f"\n{C_BOLD}{C_CYAN}claudebot setup{suffix}{C_RESET}")
     print(f"{C_DIM}Configure the Telegram bot that drives your Claude Code.{C_RESET}\n")
 
     _check_claude()
@@ -159,15 +161,15 @@ def run() -> int:
 
     print(f"\n{C_GREEN}✓ Saved {path}{C_RESET}")
     print(f"\n{C_BOLD}Next:{C_RESET}")
-    print(f"   {C_CYAN}claudebot doctor{C_RESET}            # verify the setup")
-    print(f"   {C_CYAN}claudebot run{C_RESET}               # run in the foreground")
-    print(f"   {C_CYAN}claudebot service install{C_RESET}   # keep it always-on\n")
+    print(f"   {C_CYAN}claudebot {flag}doctor{C_RESET}            # verify the setup")
+    print(f"   {C_CYAN}claudebot {flag}run{C_RESET}               # run in the foreground")
+    print(f"   {C_CYAN}claudebot {flag}service install{C_RESET}   # keep it always-on\n")
 
     if p.yes_no("Install the always-on service now?", default=False):
         from claudebot.service import UnsupportedPlatform, get_service_manager
 
         try:
-            get_service_manager(prior.get("CLAUDEBOT_CLAUDE_BINARY", "claude")).install()
+            get_service_manager(prior.get("CLAUDEBOT_CLAUDE_BINARY", "claude"), instance).install()
         except UnsupportedPlatform as exc:
             print(f"{C_YELLOW}{exc}{C_RESET}")
         except Exception as exc:  # noqa: BLE001

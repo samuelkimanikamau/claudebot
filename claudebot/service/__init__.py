@@ -21,15 +21,23 @@ class UnsupportedPlatform(RuntimeError):
 class ServiceManager:
     """Base class with the bits shared by systemd and launchd back-ends."""
 
-    name = "claudebot"
-
-    def __init__(self, claude_binary: str = "claude") -> None:
+    def __init__(self, claude_binary: str = "claude", instance: str | None = None) -> None:
         self.claude_binary = claude_binary
+        self.instance = instance  # None = the default bot; else a named second bot
+
+    @property
+    def name(self) -> str:
+        return "claudebot" if not self.instance else f"claudebot-{self.instance}"
 
     # The command the service runs. Using the current interpreter + ``-m`` makes
-    # it venv-correct and PATH-independent.
+    # it venv-correct and PATH-independent. A named instance is passed through so
+    # the running bot uses that instance's state dir.
     def bot_argv(self) -> list[str]:
-        return [sys.executable, "-m", "claudebot", "run"]
+        argv = [sys.executable, "-m", "claudebot"]
+        if self.instance:
+            argv += ["--instance", self.instance]
+        argv += ["run"]
+        return argv
 
     def path_env(self) -> str:
         """A PATH that definitely contains the ``claude`` binary and uv/node shims."""
@@ -73,15 +81,17 @@ class ServiceManager:
     def logs(self, follow: bool = False) -> None: ...  # noqa: E704
 
 
-def get_service_manager(claude_binary: str = "claude") -> ServiceManager:
+def get_service_manager(
+    claude_binary: str = "claude", instance: str | None = None
+) -> ServiceManager:
     if sys.platform == "darwin":
         from claudebot.service.launchd import LaunchdService
 
-        return LaunchdService(claude_binary)
+        return LaunchdService(claude_binary, instance)
     if sys.platform.startswith("linux"):
         from claudebot.service.systemd import SystemdService
 
-        return SystemdService(claude_binary)
+        return SystemdService(claude_binary, instance)
     raise UnsupportedPlatform(
         f"No service backend for platform {sys.platform!r}. "
         "Run `claudebot run` under your own supervisor (pm2, docker, tmux, …)."

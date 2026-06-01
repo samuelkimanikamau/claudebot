@@ -39,10 +39,29 @@ def cmd_run(_args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_setup(_args: argparse.Namespace) -> int:
+def cmd_setup(args: argparse.Namespace) -> int:
     from claudebot import wizard
 
-    return wizard.run()
+    return wizard.run(instance=getattr(args, "instance", None))
+
+
+def cmd_instances(_args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from claudebot.core.paths import instance_state_dir, list_instances
+
+    rows = [("(default)", Path.home() / ".claudebot", "")]
+    for name in list_instances():
+        rows.append((name, instance_state_dir(name), f"--instance {name} "))
+
+    print("\nBots on this machine:\n")
+    for name, sdir, flag in rows:
+        state = "✓ configured" if (sdir / ".env").exists() else "· not set up"
+        print(f"  {name:<14} {state}")
+        print(f"  {'':<14} dir: {sdir}")
+        print(f"  {'':<14} run: claudebot {flag}run    manage: claudebot {flag}service status\n")
+    print("Add another bot:  claudebot --instance <name> setup\n")
+    return 0
 
 
 def cmd_doctor(_args: argparse.Namespace) -> int:
@@ -79,15 +98,18 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
             detail = "" if logged_in else detail
         check("Claude logged in (subscription, no API key)", logged_in, detail)
 
+    from claudebot.core.paths import env_file
+
+    cfg = env_file()
     try:
         settings = load_settings()
     except Exception as exc:  # noqa: BLE001
-        check("config loaded (~/.claudebot/.env)", False, "run `claudebot setup`")
+        check("config loaded", False, f"{cfg} — run `claudebot setup`")
         print(f"     {exc}")
         print("\nFix the ✗ items above, then re-run `claudebot doctor`.")
         return 1
 
-    check("config loaded (~/.claudebot/.env)", True)
+    check("config loaded", True, str(cfg))
     check(
         "allowed users set",
         bool(settings.allowed_user_ids),
@@ -124,7 +146,7 @@ def cmd_service(args: argparse.Namespace) -> int:
         pass
 
     try:
-        manager = get_service_manager(claude_binary)
+        manager = get_service_manager(claude_binary, instance=getattr(args, "instance", None))
     except UnsupportedPlatform as exc:
         print(exc)
         return 1
@@ -164,7 +186,7 @@ def cmd_update(args: argparse.Namespace) -> int:
     try:
         from claudebot.service import get_service_manager
 
-        manager = get_service_manager()
+        manager = get_service_manager(instance=getattr(args, "instance", None))
         svc_py = manager.installed_python()
         if svc_py and Path(svc_py).exists():
             target_py = svc_py
@@ -252,11 +274,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-V", "--version", action="version", version=f"claudebot {version_string()}"
     )
+    parser.add_argument(
+        "--instance",
+        metavar="NAME",
+        help="Operate a SECOND bot with its own state dir, config, lock, and service "
+        "(e.g. `claudebot --instance work setup`). Omit for your main bot.",
+    )
     sub = parser.add_subparsers(dest="command", metavar="<command>")
 
     sub.add_parser("run", help="Run the bot in the foreground.").set_defaults(func=cmd_run)
     sub.add_parser("setup", help="Interactive setup wizard.").set_defaults(func=cmd_setup)
     sub.add_parser("doctor", help="Check configuration and connectivity.").set_defaults(func=cmd_doctor)
+    sub.add_parser("instances", help="List your bots (default + named).").set_defaults(func=cmd_instances)
 
     update = sub.add_parser("update", help="Pull latest, reinstall, and restart the service.")
     update.add_argument("--no-pull", action="store_true", help="Skip `git pull`.")
@@ -281,5 +310,16 @@ def main(argv: list[str] | None = None) -> int:
     if not getattr(args, "func", None):
         parser.print_help()
         return 0
+    # A named instance redirects ALL state (config, sessions, lock, logs) to its
+    # own dir by setting CLAUDEBOT_STATE_DIR before anything reads it.
+    if getattr(args, "instance", None):
+        from claudebot.core.paths import instance_state_dir, validate_instance_name
+
+        try:
+            validate_instance_name(args.instance)
+        except ValueError as exc:
+            print(f"⚠  {exc}")
+            return 2
+        os.environ["CLAUDEBOT_STATE_DIR"] = str(instance_state_dir(args.instance))
     setup_logging(os.environ.get("CLAUDEBOT_LOG_LEVEL", "INFO"))
     return args.func(args)
