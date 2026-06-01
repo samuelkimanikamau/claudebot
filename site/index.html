@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0c0a09" />
+<script>document.documentElement.className=document.documentElement.className.replace('no-js','js');</script>
 <title>claudebot — Claude Code, from your phone</title>
 <meta name="description" content="A self-hosted Telegram bot that drives the real Claude Code binary on your own Pro/Max subscription. No API key to manage, nothing metered per token." />
 <meta property="og:title" content="claudebot — Claude Code, from your phone" />
@@ -33,6 +35,15 @@
   }
   ::selection{background:var(--amber); color:#160d08}
   a{color:inherit;text-decoration:none}
+
+  /* ---- inline icon system (crisp vectors, scale with font-size) ---- */
+  .i{width:1em;height:1em;display:inline-block;vertical-align:-.14em;flex:0 0 auto;
+    fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- visible, keyboard-friendly focus ---- */
+  a:focus-visible,button:focus-visible,summary:focus-visible{
+    outline:2px solid var(--amber-2);outline-offset:3px;border-radius:7px}
+  :focus:not(:focus-visible){outline:none}
   /* ---- texture / atmosphere ---- */
   body::before{ /* warm grain */
     content:""; position:fixed; inset:0; z-index:9999; pointer-events:none; opacity:.035;
@@ -47,7 +58,8 @@
       linear-gradient(var(--mut) 1px, transparent 1px) 0 0/64px 64px;
     mask-image:linear-gradient(180deg,#000,#000 60%,transparent);
   }
-  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px;position:relative;z-index:1}
+  .wrap{max-width:var(--maxw);margin:0 auto;position:relative;z-index:1;
+    padding:0 max(28px,env(safe-area-inset-left)) 0 max(28px,env(safe-area-inset-right))}
 
   /* ---- typographic helpers ---- */
   .mono{font-family:var(--mono)}
@@ -62,22 +74,27 @@
   nav{position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);
     background:rgba(11,9,8,.93);
     border-bottom:1px solid var(--line)}
-  .nav-in{max-width:var(--maxw);margin:0 auto;padding:14px 28px;display:flex;align-items:center;gap:28px}
+  .nav-in{max-width:var(--maxw);margin:0 auto;display:flex;align-items:center;gap:28px;
+    padding:14px max(28px,env(safe-area-inset-right)) 14px max(28px,env(safe-area-inset-left))}
   .brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-0.03em;font-size:18px}
   .logo{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
     background:linear-gradient(150deg,var(--amber),var(--amber-deep));color:#1a0f08;flex:0 0 auto;
-    font-family:var(--mono);font-weight:700;font-size:15px;box-shadow:0 0 0 1px rgba(255,180,130,.25), 0 6px 20px -8px var(--amber-deep)}
+    box-shadow:0 0 0 1px rgba(255,180,130,.25), 0 6px 20px -8px var(--amber-deep)}
+  .logo .i{width:16px;height:16px;stroke-width:2.4}
   .nav-links{display:flex;gap:24px;margin-left:auto;align-items:center}
   .nav-links a{font-size:14.5px;color:var(--ink-dim);transition:color .2s}
   .nav-links a:hover{color:var(--ink)}
-  .btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13.5px;font-weight:500;
-    padding:9px 15px;border-radius:9px;border:1px solid var(--line-2);background:var(--bg-3);color:var(--ink);
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--mono);font-size:13.5px;font-weight:500;
+    padding:10px 15px;min-height:40px;border-radius:9px;border:1px solid var(--line-2);background:var(--bg-3);color:var(--ink);
     transition:.2s;cursor:pointer;letter-spacing:-0.01em}
   .btn:hover{border-color:var(--amber);background:var(--bg-4);transform:translateY(-1px)}
+  .btn .i{width:15px;height:15px}
   .btn-amber{background:var(--amber);color:#190d06;border:none;font-weight:700;
     box-shadow:0 8px 24px -12px var(--amber-deep), inset 0 1px 0 rgba(255,226,202,.45)}
   .btn-amber:hover{filter:brightness(1.07);transform:translateY(-1px)}
-  .nav-toggle{display:none;margin-left:auto;background:none;border:1px solid var(--line-2);border-radius:8px;color:var(--ink);padding:8px 10px;cursor:pointer}
+  .nav-toggle{display:none;margin-left:auto;background:none;border:1px solid var(--line-2);border-radius:8px;color:var(--ink);
+    width:44px;height:44px;align-items:center;justify-content:center;cursor:pointer}
+  .nav-toggle .i{width:22px;height:22px}
 
   /* ---- hero ---- */
   .hero{padding:78px 0 60px;position:relative}
@@ -94,9 +111,9 @@
 
   .cmd{margin-top:30px;display:flex;align-items:stretch;border:1px solid var(--line-2);border-radius:12px;background:#0a0807;overflow:hidden;max-width:560px;box-shadow:0 20px 50px -28px #000}
   .cmd .ps1{font-family:var(--mono);color:var(--amber);padding:14px 4px 14px 16px;font-size:13.5px;user-select:none}
-  .cmd code{background:none;border:none;color:var(--ink);padding:14px 8px;font-size:13.5px;flex:1;overflow-x:auto;white-space:nowrap;display:flex;align-items:center}
+  .cmd code{background:none;border:none;color:var(--ink);padding:14px 8px;font-size:13.5px;flex:1 1 0;width:0;min-width:0;overflow-x:auto;white-space:nowrap;display:flex;align-items:center}
   .cmd .copy{border:none;border-left:1px solid var(--line);background:var(--bg-3);color:var(--ink-dim);
-    padding:0 16px;font-family:var(--mono);font-size:12px;cursor:pointer;transition:.2s;letter-spacing:.05em}
+    padding:0 16px;flex:0 0 68px;min-width:44px;font-family:var(--mono);font-size:12px;cursor:pointer;transition:.2s;letter-spacing:.05em}
   .cmd .copy:hover{color:var(--amber-2);background:var(--bg-4)}
   .cmd .copy.ok{color:var(--green-2)}
   .hero-cta{display:flex;gap:13px;margin-top:24px;flex-wrap:wrap}
@@ -110,15 +127,15 @@
   .phone::before{content:"";position:absolute;top:20px;left:50%;transform:translateX(-50%);width:92px;height:5px;border-radius:3px;background:#000;opacity:.5;z-index:3}
   .screen{background:linear-gradient(180deg,#0e0c0b,#100d0b);border-radius:21px;overflow:hidden;border:1px solid var(--line)}
   .tg-head{display:flex;align-items:center;gap:11px;padding:16px 15px 13px;border-bottom:1px solid var(--line);background:#15110e}
-  .tg-av{width:38px;height:38px;border-radius:50%;background:linear-gradient(150deg,var(--amber),var(--amber-deep));display:grid;place-items:center;color:#190d06;font-family:var(--mono);font-weight:700;font-size:16px}
+  .tg-av{width:38px;height:38px;border-radius:50%;background:linear-gradient(150deg,var(--amber),var(--amber-deep));display:grid;place-items:center;color:#190d06}
+  .tg-av .i{width:20px;height:20px;stroke-width:2.3}
   .tg-name{font-weight:700;font-size:15px;letter-spacing:-0.02em}
   .tg-status{font-size:12px;color:var(--green-2);font-family:var(--mono);display:flex;align-items:center;gap:6px}
   .chat{padding:16px 13px 18px;display:flex;flex-direction:column;gap:10px;min-height:386px;
     background:
       radial-gradient(circle at 18% 12%, rgba(232,137,90,.05), transparent 40%),
       repeating-linear-gradient(45deg, transparent 0 18px, rgba(255,255,255,.008) 18px 19px)}
-  .msg{max-width:84%;padding:9px 13px;border-radius:15px;font-size:13.6px;line-height:1.5;opacity:0;transform:translateY(8px);
-    animation:rise .5s cubic-bezier(.2,.8,.2,1) forwards}
+  .msg{max-width:84%;padding:9px 13px;border-radius:15px;font-size:13.6px;line-height:1.5;opacity:1;transform:none}
   @keyframes rise{to{opacity:1;transform:none}}
   .me{align-self:flex-end;background:linear-gradient(160deg,var(--amber-deep),#9c4f2c);color:#fbeee6;border-bottom-right-radius:5px}
   .bot{align-self:flex-start;background:var(--bg-4);border:1px solid var(--line-2);border-bottom-left-radius:5px;color:var(--ink)}
@@ -126,8 +143,7 @@
   .bot .row{display:flex;gap:7px;font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin-top:2px}
   .bot .ok{color:var(--green-2)}
   .d1{animation-delay:.3s}.d2{animation-delay:1.0s}.d3{animation-delay:1.7s}.d4{animation-delay:2.5s}.d5{animation-delay:3.2s}
-  .typing{align-self:flex-start;display:flex;gap:4px;padding:12px 14px;background:var(--bg-4);border:1px solid var(--line-2);border-radius:15px;border-bottom-left-radius:5px;
-    opacity:0;animation:rise .4s .55s forwards, fadeout .3s 1.55s forwards}
+  .typing{display:none}
   @keyframes fadeout{to{opacity:0;height:0;padding:0;margin:-5px 0;overflow:hidden}}
   .typing i{width:7px;height:7px;border-radius:50%;background:var(--ink-dim);animation:bob 1s infinite}
   .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
@@ -158,7 +174,9 @@
   .card .n{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:.1em}
   .card h3{font-size:21px;margin:14px 0 9px;letter-spacing:-0.03em}
   .card p{font-size:15px;color:var(--ink-dim);line-height:1.62}
-  .card .ic{font-family:var(--mono);font-size:22px;color:var(--amber-2)}
+  .card .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:var(--amber-2);
+    background:linear-gradient(160deg,var(--bg-4),var(--bg-3));border:1px solid var(--line-2)}
+  .card .ic .i{width:22px;height:22px}
 
   /* ---- how it works ---- */
   .flow{display:grid;grid-template-columns:1fr;gap:0;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
@@ -169,8 +187,10 @@
   .node span{color:var(--ink-dim);font-size:11.5px}
   .node.accent{border-color:var(--amber-deep);box-shadow:0 0 0 1px rgba(232,137,90,.15)}
   .node.accent b{color:var(--amber-2)}
-  .arrow{color:var(--amber);font-size:18px;opacity:.8}
+  .arrow{color:var(--amber);opacity:.85;display:grid;place-items:center}
+  .arrow .i{width:20px;height:20px}
   .flow-note{padding:18px 26px;border-top:1px solid var(--line);color:var(--ink-dim);font-size:14.5px;display:flex;gap:10px;align-items:center;font-family:var(--mono)}
+  .flow-note .i{width:15px;height:15px;color:var(--green-2)}
 
   /* ---- allowed ---- */
   .allowed{display:grid;grid-template-columns:1.25fr .75fr;gap:30px;align-items:start}
@@ -195,8 +215,8 @@
   .check p{font-size:13px;color:var(--ink-dim);line-height:1.5}
 
   /* ---- comparison ---- */
-  .tablewrap{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--bg-2)}
-  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  .tablewrap{border:1px solid var(--line);border-radius:var(--r);overflow:auto;background:var(--bg-2);-webkit-overflow-scrolling:touch}
+  table{width:100%;min-width:640px;border-collapse:collapse;font-size:14.5px}
   th,td{padding:15px 16px;text-align:left;border-bottom:1px solid var(--line)}
   thead th{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);font-weight:500;background:#100d0b}
   th:first-child,td:first-child{text-align:left}
@@ -215,7 +235,8 @@
   .cmds{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
   .cmd-card{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:16px 18px;transition:.2s;display:flex;flex-direction:column;gap:5px}
   .cmd-card:hover{border-color:var(--line-2);background:var(--bg-3)}
-  .cmd-card .c{font-family:var(--mono);font-size:14px;color:var(--amber-2);font-weight:500}
+  .cmd-card .c{font-family:var(--mono);font-size:14px;color:var(--amber-2);font-weight:500;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .cmd-card .c .i{width:16px;height:16px}
   .cmd-card .c .arg{color:var(--ink)}
   .cmd-card p{font-size:13.5px;color:var(--ink-dim)}
   .cmds-note{margin-top:20px;font-size:14.5px;color:var(--ink-dim);border-left:2px solid var(--line-2);padding-left:14px}
@@ -265,42 +286,75 @@
   .foot-col a:hover{color:var(--amber-2)}
   .disclaimer{margin-top:40px;padding-top:22px;border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--ink-dim);line-height:1.7;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 
-  .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
-  .reveal.in{opacity:1;transform:none}
+  /* Keep content visible at all times. The page must read correctly in
+     mobile browsers, full-page screenshots, JS-disabled contexts, and
+     reduced-motion environments. */
+  .reveal,.js .reveal,.js .reveal.in{opacity:1;transform:none}
+
+  /* never let content vanish in print / screenshots / reduced-motion */
+  @media print,(prefers-reduced-motion:reduce){
+    .js .reveal,.reveal{opacity:1!important;transform:none!important;transition:none!important}
+    .msg,.typing{opacity:1!important;transform:none!important;animation:none!important;height:auto!important}
+    .typing{display:none!important}
+    .blink,.caret,.dot,.card,.btn{animation:none!important;transition:none!important}
+  }
 
   /* ---- responsive ---- */
   @media(max-width:920px){
     .hero-grid{grid-template-columns:1fr;gap:44px}
-    .stage{order:-1}
     .three,.checks,.cmds{grid-template-columns:1fr}
     .allowed,.install-grid{grid-template-columns:1fr;gap:24px}
     .nav-links{display:none}
     .nav-links.open{display:flex;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:var(--bg-2);border-bottom:1px solid var(--line);padding:8px 0}
     .nav-links.open a{padding:13px 28px}
     .nav-links.open .btn{margin:8px 28px}
-    .nav-toggle{display:block}
+    .nav-toggle{display:flex}
   }
   @media(max-width:560px){
-    .wrap{padding:0 18px}.nav-in{padding:13px 18px}
-    th:not(:first-child),td:not(:first-child){width:auto;padding:12px 6px}
+    .wrap{padding:0 max(18px,env(safe-area-inset-left)) 0 max(18px,env(safe-area-inset-right))}
+    .nav-in{padding:12px max(18px,env(safe-area-inset-right)) 12px max(18px,env(safe-area-inset-left))}
+    section{padding:50px 0}
+    .hero{padding:44px 0 48px}
+    .hero-grid{gap:34px}
+    .cmd{width:100%}
+    .cmd .copy{flex-basis:58px;padding:0 10px}
+    .phone{width:min(304px,100%)}
+    .card{padding:24px 22px}
+    th:not(:first-child),td:not(:first-child){width:auto;padding:12px 10px}
+    .flow-diagram{flex-direction:column;align-items:stretch;padding:28px 22px}
+    .arrow .i{transform:rotate(90deg);margin:auto}
     .term-body{font-size:11.5px}
     .hero h1{font-size:38px}
   }
 </style>
 </head>
 <body>
+<svg aria-hidden="true" focusable="false" width="0" height="0" style="position:absolute;overflow:hidden">
+  <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m8 10 3 2-3 2"/><path d="M13 15h3"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4 1.5-4-2-6-2.5"/><path d="M15 22v-3.5c.1-.9-.2-1.4-.7-2 2.7-.3 5.6-1.3 5.6-6A4.7 4.7 0 0 0 18.6 7c.1-.3.5-1.5-.1-3 0 0-1-.3-3.4 1.3a11.6 11.6 0 0 0-6.2 0C6.5 3.7 5.5 4 5.5 4c-.6 1.5-.2 2.7-.1 3A4.7 4.7 0 0 0 4 10.5c0 4.7 2.9 5.7 5.6 6-.3.4-.6.9-.7 1.6V22"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m9 18-6-6 6-6"/><path d="m15 6 6 6-6 6"/><path d="m13 4-2 16"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H19v4H6.5A2.5 2.5 0 0 1 4 6.5v11A2.5 2.5 0 0 0 6.5 20H20V9H6.5"/><path d="M16 14h.01"/><path d="M9 12.5h4"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M5 6.5A3.5 3.5 0 0 1 8.5 3h7A3.5 3.5 0 0 1 19 6.5v5A3.5 3.5 0 0 1 15.5 15H12l-5 4v-4.4A3.5 3.5 0 0 1 5 11.5z"/><path d="M9 8h6M9 11h4"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
+  <symbol id="i-arrows" viewBox="0 0 24 24"><path d="M7 7h11l-3-3"/><path d="M17 17H6l3 3"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.5-2h5L16 6h1.5A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-corner" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="m7 17 10-10"/></symbol>
+</svg>
 <div class="bg-grid"></div>
 
 <nav>
   <div class="nav-in">
-    <a class="brand" href="#top"><span class="logo">›_</span> claudebot</a>
-    <button class="nav-toggle" aria-label="menu" onclick="document.getElementById('nl').classList.toggle('open')">≡</button>
+    <a class="brand" href="#top"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-terminal"></use></svg></span> claudebot</a>
+    <button class="nav-toggle" aria-label="Open menu" aria-expanded="false" onclick="toggleMenu(this)"><svg class="i" aria-hidden="true"><use href="#i-menu"></use></svg></button>
     <div class="nav-links" id="nl">
       <a href="#how">How it works</a>
       <a href="#allowed">Is this allowed?</a>
       <a href="#security">Security</a>
       <a href="#install">Install</a>
-      <a class="btn" href="https://github.com/samuelkimanikamau/claudebot" target="_blank" rel="noopener">★ GitHub</a>
+      <a class="btn" href="https://github.com/samuelkimanikamau/claudebot" target="_blank" rel="noopener"><svg class="i" aria-hidden="true"><use href="#i-github"></use></svg> GitHub</a>
     </div>
   </div>
 </nav>
@@ -320,7 +374,7 @@
       </div>
 
       <div class="hero-cta">
-        <a class="btn btn-amber" href="#install">Get started ↘</a>
+        <a class="btn btn-amber" href="#install">Get started <svg class="i" aria-hidden="true"><use href="#i-corner"></use></svg></a>
         <a class="btn" href="https://github.com/samuelkimanikamau/claudebot" target="_blank" rel="noopener">View source</a>
       </div>
       <div class="hero-meta">
@@ -333,7 +387,7 @@
       <div class="phone">
         <div class="screen">
           <div class="tg-head">
-            <div class="tg-av">C</div>
+            <div class="tg-av"><svg class="i" aria-hidden="true"><use href="#i-terminal"></use></svg></div>
             <div>
               <div class="tg-name">claudebot</div>
               <div class="tg-status"><span class="dot"></span> online · driving claude</div>
@@ -342,7 +396,7 @@
           <div class="chat">
             <div class="msg me d1">ship the auth fix &amp; run the tests<div class="stamp">09:41</div></div>
             <div class="typing"><i></i><i></i><i></i></div>
-            <div class="msg bot d2"><span class="h">claudebot</span>On it — editing <span class="mono" style="color:var(--amber-2)">auth.py</span>, running the suite…<div class="row"><span class="ok">⏵</span> Bash · pytest -q</div></div>
+            <div class="msg bot d2"><span class="h">claudebot</span>On it — editing <span class="mono" style="color:var(--amber-2)">auth.py</span>, running the suite…<div class="row"><svg class="i ok" aria-hidden="true"><use href="#i-play"></use></svg> Bash · pytest -q</div></div>
             <div class="msg bot d3"><span class="h">claudebot</span><b>Done.</b> Fixed the token refresh race; <span class="grn">38 passed</span> in 0.9s. Pushed to <span class="mono">main</span>.<span class="caret"></span></div>
             <div class="msg me d4">/model opus<div class="stamp">09:42</div></div>
             <div class="msg bot d5"><span class="h">claudebot</span>model set to opus · fresh session</div>
@@ -364,17 +418,17 @@
     </div>
     <div class="three">
       <div class="card reveal">
-        <div class="ic">‹/›</div>
+        <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-code"></use></svg></div>
         <h3>The real binary</h3>
         <p>It shells out to the genuine <span class="mono amber">claude</span> you already use: the same harness, tools, and login. It's the real binary, not the Agent SDK or an API reimplementation.</p>
       </div>
       <div class="card reveal">
-        <div class="ic">∅$</div>
+        <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-wallet"></use></svg></div>
         <h3>Your plan, no API bill</h3>
         <p>Runs on your logged-in Pro/Max subscription. The OAuth token never leaves Claude Code — nothing metered, nothing to expense.</p>
       </div>
       <div class="card reveal">
-        <div class="ic">⌨</div>
+        <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-message"></use></svg></div>
         <h3>You own the UX</h3>
         <p>Your own bot process owns Telegram. Switch models, dial effort, send a photo or a PDF, stream replies. No redeploy, no config file — just another message.</p>
       </div>
@@ -393,14 +447,14 @@
     <div class="flow reveal">
       <div class="flow-diagram">
         <div class="node"><b>Telegram</b><span>your phone</span></div>
-        <span class="arrow">⇄</span>
+        <span class="arrow"><svg class="i" aria-hidden="true"><use href="#i-arrows"></use></svg></span>
         <div class="node accent"><b>claudebot</b><span>your bot process</span></div>
-        <span class="arrow">⇄</span>
+        <span class="arrow"><svg class="i" aria-hidden="true"><use href="#i-arrows"></use></svg></span>
         <div class="node"><b>claude -p</b><span>--output-format stream-json</span></div>
-        <span class="arrow">→</span>
+        <span class="arrow"><svg class="i" aria-hidden="true"><use href="#i-arrow-right"></use></svg></span>
         <div class="node accent"><b>your machine</b><span>real tools · your login</span></div>
       </div>
-      <div class="flow-note"><span class="grn">⏵</span> Warm child per chat · <span class="amber">--resume</span> across restarts · replies stream back token-by-token · token stays inside Claude Code.</div>
+      <div class="flow-note"><svg class="i" aria-hidden="true"><use href="#i-play"></use></svg> Warm child per chat · <span class="amber">--resume</span> across restarts · replies stream back token-by-token · token stays inside Claude Code.</div>
     </div>
   </div>
 </section>
@@ -487,7 +541,7 @@
       <div class="cmd-card reveal"><span class="c">/effort <span class="arg">max</span></span><p>Crank thinking for a hard problem.</p></div>
       <div class="cmd-card reveal"><span class="c">/mode <span class="arg">acceptEdits</span></span><p>Tighten what runs without asking.</p></div>
       <div class="cmd-card reveal"><span class="c">/cd <span class="arg">~/work/app</span></span><p>Switch projects on the fly.</p></div>
-      <div class="cmd-card reveal"><span class="c">📷 / 📄</span><p>Send a photo or document — Claude reads it.</p></div>
+      <div class="cmd-card reveal"><span class="c"><svg class="i" aria-hidden="true"><use href="#i-camera"></use></svg><svg class="i" aria-hidden="true"><use href="#i-file"></use></svg> Photo / PDF</span><p>Send a photo or document — Claude reads it.</p></div>
       <div class="cmd-card reveal"><span class="c">/retry · /stop · /new · /status</span><p>Resend, abort, reset, inspect.</p></div>
     </div>
     <p class="cmds-note">Tweaks are saved <b class="amber">per-chat</b> and survive restarts. Because claudebot owns Telegram, none of this needs a redeploy.</p>
@@ -562,7 +616,7 @@
   <div class="wrap">
     <div class="foot-grid">
       <div class="foot-brand">
-        <a class="brand" href="#top"><span class="logo">›_</span> claudebot</a>
+        <a class="brand" href="#top"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-terminal"></use></svg></span> claudebot</a>
         <p>Claude Code, from your phone. The real binary, on your own plan — open source and self-hosted.</p>
       </div>
       <div class="foot-links">
@@ -597,11 +651,20 @@
       setTimeout(()=>{btn.textContent=old; btn.classList.remove('ok')},1600);
     }).catch(()=>{btn.textContent='⌘C';});
   }
-  // scroll reveal
-  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12,rootMargin:'0px 0px -40px 0px'});
-  document.querySelectorAll('.reveal').forEach((el,i)=>{el.style.transitionDelay=(Math.min(i%3,2)*0.08)+'s';io.observe(el)});
+  function toggleMenu(btn){
+    const menu=document.getElementById('nl');
+    const open=menu.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(open));
+  }
+  // Keep section reveal classes as hooks only; content remains visible for screenshots, JS failures, and reduced motion.
+  document.querySelectorAll('.reveal').forEach((el,i)=>{el.style.transitionDelay=(Math.min(i%3,2)*0.08)+'s';el.classList.add('in')});
   // close mobile menu on nav click
-  document.querySelectorAll('#nl a').forEach(a=>a.addEventListener('click',()=>document.getElementById('nl').classList.remove('open')));
+  document.querySelectorAll('#nl a').forEach(a=>a.addEventListener('click',()=>{
+    const menu=document.getElementById('nl');
+    const btn=document.querySelector('.nav-toggle');
+    menu.classList.remove('open');
+    if(btn) btn.setAttribute('aria-expanded','false');
+  }));
 </script>
 </body>
 </html>
