@@ -408,34 +408,6 @@
   <div class="wrap"><p class="under">Calls <b>claude -p --output-format stream-json</b> and streams output back to Telegram.</p></div>
 </header>
 
-<!-- THREE CONSTRAINTS -->
-<section id="why">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="sec-num">Overview</span>
-      <h2>The same Claude Code, on Telegram.</h2>
-      <span class="sub">A thin Telegram layer over Claude Code, scoped to a single user.</span>
-    </div>
-    <div class="three">
-      <div class="card reveal">
-        <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-code"></use></svg></div>
-        <h3>The real binary</h3>
-        <p>Shells out to the <span class="mono amber">claude</span> command you run in the terminal — same login, same local tools.</p>
-      </div>
-      <div class="card reveal">
-        <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-wallet"></use></svg></div>
-        <h3>Use your existing plan</h3>
-        <p>Runs on your logged-in Pro or Max plan. No API key, no second bill.</p>
-      </div>
-      <div class="card reveal">
-        <div class="ic"><svg class="i" aria-hidden="true"><use href="#i-message"></use></svg></div>
-        <h3>You control the chat</h3>
-        <p>Switch models, send files, stop a run, or move projects — all from chat commands.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- HOW IT WORKS -->
 <section id="how">
   <div class="wrap">
@@ -498,53 +470,8 @@
       <div class="check reveal"><span class="tick">✓</span><div><b>Fail-closed allowlist</b><p>Empty list means nobody gets access. DM-only handlers ignore groups and channels.</p></div></div>
       <div class="check reveal"><span class="tick">✓</span><div><b>Content-injection guard</b><p>Attached and fetched content is treated as data, not instructions to follow.</p></div></div>
       <div class="check reveal"><span class="tick">✓</span><div><b>Secret hygiene</b><p>Bot tokens are stripped from the child environment. <span class="mono">.env</span> and state stay private.</p></div></div>
-      <div class="check reveal"><span class="tick">✓</span><div><b>One poller, bounded runs</b><p>Per-turn timeouts prevent stuck runs. An exclusive lock keeps one poller per host.</p></div></div>
-      <div class="check reveal"><span class="tick">✓</span><div><b>Smoke-gated updates</b><p><span class="mono">claudebot update</span> runs tests before a new build goes live and rolls back on failure.</p></div></div>
       <div class="check reveal"><span class="tick">✓</span><div><b>Auditable &amp; open</b><p>The code is small, readable, and MIT-licensed. Audit the parts that touch your machine.</p></div></div>
     </div>
-  </div>
-</section>
-
-<!-- COMPARISON -->
-<section id="compare">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="sec-num">Comparison</span>
-      <h2>claudebot vs the official plugin.</h2>
-      <span class="sub">Two ways to run Claude Code remotely.</span>
-    </div>
-    <div class="tablewrap reveal">
-      <table>
-        <thead><tr><th>Approach</th><th>Real binary</th><th>No API key</th><th>Chat control</th><th>Always-alive</th></tr></thead>
-        <tbody>
-          <tr class="me-row"><td><div class="rowname">claudebot <small>headless stream-json</small></div></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
-          <tr><td><div class="rowname">Official Telegram plugin <small>claude-plugins-official</small></div></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="meh">fixed UX</span></td><td><span class="y">✓</span></td></tr>
-          <tr><td><div class="rowname">claude-code-telegram <small>RichardAtCT</small></div></td><td><span class="meh">via SDK</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
-          <tr><td><div class="rowname">PTY / TUI scraping</div></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="no">brittle</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="tbl-note">Official plugin for the simplest setup. claudebot when you want to own the Telegram experience.</p>
-  </div>
-</section>
-
-<!-- COMMANDS -->
-<section id="commands">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="sec-num">Commands</span>
-      <h2>Run it from Telegram.</h2>
-      <span class="sub">Drive Claude Code with chat commands.</span>
-    </div>
-    <div class="cmds">
-      <div class="cmd-card reveal"><span class="c">/model <span class="arg">opus</span></span><p>Switch models mid-conversation.</p></div>
-      <div class="cmd-card reveal"><span class="c">/effort <span class="arg">max</span></span><p>Use more reasoning for a hard problem.</p></div>
-      <div class="cmd-card reveal"><span class="c">/mode <span class="arg">acceptEdits</span></span><p>Change what Claude Code can run without asking.</p></div>
-      <div class="cmd-card reveal"><span class="c">/cd <span class="arg">~/work/app</span></span><p>Switch projects without opening a terminal.</p></div>
-      <div class="cmd-card reveal"><span class="c"><svg class="i" aria-hidden="true"><use href="#i-camera"></use></svg><svg class="i" aria-hidden="true"><use href="#i-file"></use></svg> Photo / PDF</span><p>Send a photo or document for Claude to read.</p></div>
-      <div class="cmd-card reveal"><span class="c">/retry · /stop · /new · /status</span><p>Retry, stop, reset, or check status.</p></div>
-    </div>
-    <p class="cmds-note">Settings persist <b class="amber">per chat</b> across restarts.</p>
   </div>
 </section>
 
@@ -603,10 +530,7 @@
     </div>
     <div class="faq reveal">
       <details open><summary>Can I add my team? <span class="plus">+</span></summary><p>No. That's account sharing, and it hands them a shell on your machine. One Telegram ID — yours.</p></details>
-      <details><summary>Can I run more than one bot? <span class="plus">+</span></summary><p>Yes. Each bot is an <i>instance</i> with its own token, config, and service. <span class="mono">claudebot --instance work setup</span> creates a second one beside your main bot.</p></details>
-      <details><summary>Is there a hosted version? <span class="plus">+</span></summary><p>No. It runs on <b>your</b> subscription and your machine — no hosted plan, no per-token bill.</p></details>
       <details><summary>What does it cost? <span class="plus">+</span></summary><p>Nothing beyond the Claude plan you already pay for. claudebot is <b>free and MIT-licensed</b>.</p></details>
-      <details><summary>Which platforms? <span class="plus">+</span></summary><p><b>macOS</b> with launchd and <b>Linux</b> with systemd --user. You need Claude Code installed and logged in, plus Python 3.10+.</p></details>
       <details><summary>Will this get my account banned? <span class="plus">+</span></summary><p>It depends how you use it. Stay single-user, never extract the token, no unattended loops — see <a href="#allowed" style="color:var(--amber-2)">Subscription use</a>.</p></details>
     </div>
   </div>
@@ -627,13 +551,6 @@
           <a href="https://github.com/samuelkimanikamau/claudebot#readme" target="_blank" rel="noopener">Docs</a>
           <a href="/deck/">Pitch deck</a>
           <a href="https://github.com/sponsors/samuelkimanikamau" target="_blank" rel="noopener">Sponsor</a>
-        </div>
-        <div class="foot-col">
-          <h4>Jump to</h4>
-          <a href="#why">Why</a>
-          <a href="#allowed">Subscription use</a>
-          <a href="#security">Security</a>
-          <a href="#install">Install</a>
         </div>
       </div>
     </div>
