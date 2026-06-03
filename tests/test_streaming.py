@@ -88,6 +88,7 @@ class RecordBot:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str | None, int]] = []
         self.edited: list[tuple[str, str | None, int]] = []
+        self.deleted: list[int] = []
         self._next = 0
 
     async def send_message(self, chat_id, text, parse_mode=None):
@@ -97,6 +98,9 @@ class RecordBot:
 
     async def edit_message_text(self, text, chat_id, message_id, parse_mode=None):
         self.edited.append((text, parse_mode, message_id))
+
+    async def delete_message(self, chat_id, message_id):
+        self.deleted.append(message_id)
 
 
 async def test_progressive_streaming_preserves_head_no_reorder():
@@ -117,12 +121,18 @@ async def test_progressive_streaming_preserves_head_no_reorder():
     assert len(bot.sent) == 2  # no extra head message created at finalize
 
 
-async def test_finalize_blanks_leftover_blocks_when_reply_shrinks():
+async def test_finalize_deletes_leftover_blocks_when_reply_shrinks():
     bot = RecordBot()
     streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
     streamer._buffer = "A" * 3500 + "\n" + "B" * 1000  # streamed as 2 blocks
     await streamer._preview_now()
     assert len(streamer._block_ids) == 2
-    # Final reply is short -> 1 chunk; the 2nd streamed bubble must be blanked.
+    leftover_id = streamer._block_ids[1]
+    # Final reply is short -> 1 chunk; the 2nd streamed bubble must be deleted,
+    # not left behind as a stranded "…".
     await streamer.finalize("short final")
-    assert any(mid == streamer._block_ids[1] and text == "…" for text, _m, mid in bot.edited)
+    assert leftover_id in bot.deleted
+    assert not any(text == "…" for text, _m, _mid in bot.edited)
+    # Internal block state is trimmed to match the bubbles that remain.
+    assert streamer._block_ids == [leftover_id - 1]
+    assert len(streamer._block_last) == 1
