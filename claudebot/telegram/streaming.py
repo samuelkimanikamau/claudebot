@@ -166,13 +166,15 @@ class Streamer:
                 if msg_id is not None:
                     self._block_ids.append(msg_id)
                     self._block_last.append(chunk)
-        # Reply ended up SHORTER than what streamed -> blank the leftover bubbles
-        # so a stale streamed tail isn't left behind.
+        # Reply ended up SHORTER than what streamed -> delete the leftover bubbles
+        # so a stale streamed tail (or a stranded "…") isn't left behind.
         for j in range(len(chunks), len(self._block_ids)):
             with contextlib.suppress(TelegramError):
-                await self.bot.edit_message_text(
-                    "…", chat_id=self.chat_id, message_id=self._block_ids[j]
+                await self.bot.delete_message(
+                    chat_id=self.chat_id, message_id=self._block_ids[j]
                 )
+        del self._block_ids[len(chunks):]
+        del self._block_last[len(chunks):]
 
     async def _send(self, raw: str, edit_id: int | None) -> int | None:
         """Send/edit one chunk: MarkdownV2 first, then plain text on rejection."""
