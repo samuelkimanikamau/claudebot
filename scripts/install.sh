@@ -21,12 +21,26 @@ printf '\n%s\n' "${c_bold}${c_cyan}  claudebot installer${c_reset}"
 printf '%s\n\n' "${c_dim}  A Telegram bot that drives the real Claude Code — no API key.${c_reset}"
 
 # --- prerequisites ----------------------------------------------------------
-PY="$(command -v python3 || true)"
-[ -n "$PY" ] || die "python3 not found. Install Python 3.10+ first."
+# Pick the newest suitable Python. macOS often ships /usr/bin/python3 as 3.9
+# while a 3.10+ build lives under a versioned name (python3.13, etc.), so probe
+# versioned binaries before the bare `python3` rather than failing on the first.
+PY=""
+for cand in python3.14 python3.13 python3.12 python3.11 python3.10 python3 python; do
+  p="$(command -v "$cand" 2>/dev/null)" || continue
+  if "$p" -c 'import sys;sys.exit(0 if sys.version_info[:2]>=(3,10) else 1)' 2>/dev/null; then
+    PY="$p"; break
+  fi
+done
+if [ -z "$PY" ]; then
+  saw="$(python3 -V 2>&1 || echo 'none on PATH')"
+  warn "No Python 3.10+ found (saw: $saw). Install a newer Python, then re-run:"
+  warn "   macOS (Homebrew):  brew install python@3.12"
+  warn "   Linux (apt):       sudo apt install python3.12 python3.12-venv"
+  warn "   Any OS (pyenv):    pyenv install 3.12 && pyenv global 3.12"
+  die "Python 3.10+ is required."
+fi
 PYVER="$("$PY" -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
-"$PY" -c 'import sys;sys.exit(0 if sys.version_info[:2]>=(3,10) else 1)' \
-  || die "Python $PYVER found, but 3.10+ is required."
-ok "python3 $PYVER"
+ok "python $PYVER ($PY)"
 
 if ! command -v claude >/dev/null 2>&1; then
   warn "Claude Code (\`claude\`) is not on PATH — install it and run \`claude auth login\`:"
