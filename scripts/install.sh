@@ -71,7 +71,16 @@ ok "source: $SRC"
 
 # --- venv + install ---------------------------------------------------------
 info "Creating venv at $VENV"
-"$PY" -m venv "$VENV"
+venv_err="$(mktemp)"
+if ! "$PY" -m venv "$VENV" 2>"$venv_err"; then
+  sed 's/^/    /' "$venv_err" >&2 2>/dev/null || true
+  rm -f "$venv_err"
+  warn "Could not create a virtualenv with $PY ($PYVER)."
+  warn "On Debian/Ubuntu the venv module ships in a separate package — install it and re-run:"
+  warn "   sudo apt install python$PYVER-venv"
+  die "venv creation failed."
+fi
+rm -f "$venv_err"
 "$VENV/bin/python" -m pip install --quiet --upgrade pip
 info "Installing claudebot"
 "$VENV/bin/python" -m pip install --quiet -e "$SRC"
