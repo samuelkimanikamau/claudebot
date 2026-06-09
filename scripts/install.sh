@@ -97,9 +97,16 @@ case ":$PATH:" in
 esac
 
 # --- setup wizard -----------------------------------------------------------
+# When piped (`curl … | bash`) our stdin is the script pipe, not the keyboard,
+# so reattach the terminal for the wizard's prompts. With no terminal at all
+# (CI, nested pipes) skip it — the wizard would only bail anyway.
 printf '\n'
-info "Launching setup…"
-"$VENV/bin/claudebot" setup || warn "Setup did not finish — run \`claudebot setup\` any time."
+if [ -r /dev/tty ]; then
+  info "Launching setup…"
+  "$VENV/bin/claudebot" setup </dev/tty || warn "Setup did not finish — run \`claudebot setup\` any time."
+else
+  warn "No terminal attached — finish setup later with: claudebot setup"
+fi
 
 printf '\n%s\n' "${c_green}${c_bold}Done.${c_reset}"
 printf '%s\n'   "  ${c_cyan}claudebot doctor${c_reset}            verify everything"

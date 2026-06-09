@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from claudebot.core.config import PERMISSION_MODES
@@ -23,24 +24,40 @@ C_DIM = "\033[2m"
 C_RESET = "\033[0m"
 
 
-def _tty() -> io.TextIOWrapper | None:
-    try:
-        return open("/dev/tty", "r+")  # noqa: SIM115 - closed by the OS at exit
-    except OSError:
-        return None
+def _tty() -> tuple[io.TextIOWrapper | None, bool]:
+    """Open the controlling terminal. Returns ``(handle, writable)``.
+
+    Prefer ``r+`` so prompts go straight to the terminal; fall back to read-only
+    (some environments expose ``/dev/tty`` but not for writing) and emit prompts
+    to stdout instead. ``(None, False)`` means there is no controlling terminal.
+    """
+    for mode in ("r+", "r"):
+        try:
+            return open("/dev/tty", mode), ("+" in mode)  # noqa: SIM115 - closed at exit
+        except OSError:
+            continue
+    return None, False
 
 
 class _Prompt:
     def __init__(self) -> None:
-        self.tty = _tty()
+        self.tty, self._tty_writable = _tty()
+        # We can prompt only with a real terminal: either /dev/tty opened, or
+        # stdin itself is a tty. When piped (e.g. `curl … | bash`) both are
+        # false and input() would read the leftover pipe / EOF — so bail instead.
+        self.interactive = self.tty is not None or sys.stdin.isatty()
 
     def ask(self, label: str, default: str | None = None) -> str:
         suffix = f" {C_DIM}[{default}]{C_RESET}" if default else ""
         text = f"{C_CYAN}?{C_RESET} {label}{suffix}: "
         if self.tty is not None:
-            self.tty.write(text)
-            self.tty.flush()
-            answer = (self.tty.readline() or "").strip()
+            out = self.tty if self._tty_writable else sys.stdout
+            out.write(text)
+            out.flush()
+            line = self.tty.readline()
+            if not line:  # Ctrl-D / closed terminal
+                raise EOFError
+            answer = line.strip()
         else:
             answer = input(text).strip()
         return answer or (default or "")
@@ -97,6 +114,26 @@ def run(instance: str | None = None) -> int:
     prior = _existing()
     p = _Prompt()
 
+    if not p.interactive:
+        print(
+            f"{C_YELLOW}⚠  Setup needs an interactive terminal, but none is attached.{C_RESET}\n"
+            f"   {C_DIM}This happens when the installer is piped (e.g. `curl … | bash`).{C_RESET}\n\n"
+            f"   Finish setup in your terminal with:\n"
+            f"       {C_CYAN}{C_BOLD}claudebot {flag}setup{C_RESET}\n"
+        )
+        return 1
+
+    try:
+        return _run_prompts(p, prior, instance, flag)
+    except (EOFError, KeyboardInterrupt):
+        print(
+            f"\n{C_YELLOW}⚠  Setup cancelled — no input received.{C_RESET} "
+            f"Re-run {C_CYAN}claudebot {flag}setup{C_RESET} any time.\n"
+        )
+        return 1
+
+
+def _run_prompts(p: _Prompt, prior: dict[str, str], instance: str | None, flag: str) -> int:
     # --- Telegram bot token -------------------------------------------------
     print(f"{C_BOLD}1. Telegram bot token{C_RESET}")
     print(f"   Create a bot with {C_CYAN}@BotFather{C_RESET} → /newbot → copy the token.")
