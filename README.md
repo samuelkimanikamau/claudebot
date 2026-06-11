@@ -5,6 +5,7 @@
 [![CI](https://github.com/samuelkimanikamau/claudebot/actions/workflows/ci.yml/badge.svg)](https://github.com/samuelkimanikamau/claudebot/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-10b981.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
+[![PyPI](https://img.shields.io/pypi/v/claudebot.svg)](https://pypi.org/project/claudebot/)
 
 **[claudebot.ve.ke](https://claudebot.ve.ke)** · [Install](#install) · [Commands](#talking-to-the-bot) · [Is this allowed?](#is-this-allowed) · [How it works](#how-it-works)
 
@@ -50,6 +51,13 @@ curl -fsSL https://claudebot.ve.ke/install.sh | bash
 
 (or the same script straight from this repo:
 `curl -fsSL https://raw.githubusercontent.com/samuelkimanikamau/claudebot/main/scripts/install.sh | bash`)
+
+### Via pipx / pip
+
+```bash
+pipx install claudebot     # or: pip install claudebot
+claudebot setup
+```
 
 The installer creates an isolated venv at `~/.claudebot/venv`, links `claudebot`
 into `~/.local/bin`, then runs the setup wizard and offers to install the
