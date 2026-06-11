@@ -10,6 +10,11 @@
 <meta property="og:title" content="claudebot | Claude Code on Telegram" />
 <meta property="og:description" content="Self-host Claude Code on Telegram. Runs the real claude binary on your machine, using your existing Claude Code login." />
 <meta property="og:type" content="website" />
+<meta property="og:url" content="https://claudebot.ve.ke/" />
+<meta property="og:image" content="https://claudebot.ve.ke/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="canonical" href="https://claudebot.ve.ke/" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -28,6 +33,7 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+  section[id],a[id]{scroll-margin-top:84px} /* keep anchored headings clear of the sticky nav */
   body{
     background:var(--bg); color:var(--ink); font-family:var(--display);
     font-size:17px; line-height:1.6; letter-spacing:-0.01em;
@@ -45,15 +51,10 @@
     outline:2px solid var(--amber-2);outline-offset:3px;border-radius:7px}
   :focus:not(:focus-visible){outline:none}
   /* ---- texture / atmosphere ---- */
-  body::before{ /* keep the surface clean, close to ve.ke */
-    content:""; position:fixed; inset:0; z-index:9999; pointer-events:none; opacity:0;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
   .bg-grid{ position:fixed; inset:0; z-index:0; pointer-events:none;
     background:
       radial-gradient(540px 460px at 83% 22%, rgba(16,185,129,.10), transparent 58%),
       radial-gradient(620px 520px at 6% 10%, rgba(16,185,129,.055), transparent 55%),
-      linear-gradient(var(--line) 1px, transparent 1px) 0 0/none,
       linear-gradient(90deg, var(--mut) 1px, transparent 1px) 0 0/64px 64px,
       linear-gradient(var(--mut) 1px, transparent 1px) 0 0/64px 64px;
     mask-image:linear-gradient(180deg,#000,#000 60%,transparent);
@@ -111,7 +112,8 @@
 
   .cmd{margin-top:30px;display:flex;align-items:stretch;border:1px solid var(--line-2);border-radius:12px;background:#0a0807;overflow:hidden;max-width:560px;box-shadow:0 20px 50px -28px #000}
   .cmd .ps1{font-family:var(--mono);color:var(--amber);padding:14px 4px 14px 16px;font-size:13.5px;user-select:none}
-  .cmd code{background:none;border:none;color:var(--ink);padding:14px 8px;font-size:13.5px;flex:1 1 0;width:0;min-width:0;overflow-x:auto;white-space:nowrap;display:flex;align-items:center}
+  .cmd code{background:none;border:none;color:var(--ink);padding:14px 8px;font-size:13.5px;flex:1 1 0;width:0;min-width:0;overflow-x:auto;white-space:nowrap;display:flex;align-items:center;scrollbar-width:none}
+  .cmd code::-webkit-scrollbar{display:none}
   .cmd .copy{border:none;border-left:1px solid var(--line);background:var(--bg-3);color:var(--ink-dim);
     padding:0 16px;flex:0 0 68px;min-width:44px;font-family:var(--mono);font-size:12px;cursor:pointer;transition:.2s;letter-spacing:.05em}
   .cmd .copy:hover{color:var(--amber-2);background:var(--bg-4)}
@@ -137,17 +139,21 @@
       repeating-linear-gradient(45deg, transparent 0 18px, rgba(255,255,255,.008) 18px 19px)}
   .msg{max-width:84%;padding:9px 13px;border-radius:15px;font-size:13.6px;line-height:1.5;opacity:1;transform:none}
   @keyframes rise{to{opacity:1;transform:none}}
+  /* The page's one kinetic moment: the demo conversation plays itself once on
+     load. JS-gated and reduced-motion-gated; everything stays visible otherwise. */
+  @media (prefers-reduced-motion:no-preference){
+    .js .msg{opacity:0;transform:translateY(9px);animation:rise .5s cubic-bezier(.2,.7,.3,1) forwards}
+  }
   .me{align-self:flex-end;background:linear-gradient(160deg,var(--amber-deep),#047857);color:#ecfdf5;border-bottom-right-radius:5px}
   .bot{align-self:flex-start;background:var(--bg-4);border:1px solid var(--line-2);border-bottom-left-radius:5px;color:var(--ink)}
   .bot .h{color:var(--amber-2);font-weight:700;display:block;margin-bottom:3px;font-size:13px}
   .bot .row{display:flex;gap:7px;font-family:var(--mono);font-size:12px;color:var(--ink-dim);margin-top:2px}
   .bot .ok{color:var(--green-2)}
-  .d1{animation-delay:.3s}.d2{animation-delay:1.0s}.d3{animation-delay:1.7s}.d4{animation-delay:2.5s}.d5{animation-delay:3.2s}
-  .typing{display:none}
-  @keyframes fadeout{to{opacity:0;height:0;padding:0;margin:-5px 0;overflow:hidden}}
-  .typing i{width:7px;height:7px;border-radius:50%;background:var(--ink-dim);animation:bob 1s infinite}
-  .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
-  @keyframes bob{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
+  .d1{animation-delay:.35s}.d2{animation-delay:1.05s}.d3{animation-delay:1.75s}
+  .d4{animation-delay:2.35s}.d5{animation-delay:2.95s}.d6{animation-delay:3.65s}
+  .imgchip{display:flex;align-items:center;gap:7px;background:rgba(0,0,0,.28);border-radius:9px;
+    padding:7px 10px;font-family:var(--mono);font-size:11.5px;margin-bottom:6px;color:#d1fae5}
+  .imgchip .i{width:14px;height:14px}
   .caret{display:inline-block;width:7px;height:14px;background:var(--amber-2);vertical-align:-2px;margin-left:2px;animation:blink 1s steps(1) infinite}
   .stamp{font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);opacity:.6;margin-top:1px}
   .me .stamp{text-align:right}
@@ -165,18 +171,6 @@
   #allowed{padding-bottom:30px}
   #security{padding-top:38px}
   #security .sec-head h2, #install .sec-head h2{font-size:clamp(30px,4.6vw,52px)}
-
-  /* ---- three constraints ---- */
-  .three{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-  .card{background:linear-gradient(180deg,var(--bg-2),var(--bg-2)) padding-box,linear-gradient(160deg,var(--line-2),transparent) border-box;
-    border:1px solid transparent;border-radius:var(--r);padding:26px 24px;position:relative;transition:.25s;overflow:hidden}
-  .card:hover{transform:translateY(-3px)}
-  .card .n{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:.1em}
-  .card h3{font-size:21px;margin:14px 0 9px;letter-spacing:-0.03em}
-  .card p{font-size:15px;color:var(--ink-dim);line-height:1.62}
-  .card .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:var(--amber-2);
-    background:linear-gradient(160deg,var(--bg-4),var(--bg-3));border:1px solid var(--line-2)}
-  .card .ic .i{width:22px;height:22px}
 
   /* ---- how it works ---- */
   .flow{display:grid;grid-template-columns:1fr;gap:0;background:var(--bg-2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
@@ -213,33 +207,6 @@
   .check .tick{color:var(--green-2);font-family:var(--mono);font-weight:700;flex:0 0 auto}
   .check b{font-size:14.5px;font-weight:600;display:block;margin-bottom:3px}
   .check p{font-size:13px;color:var(--ink-dim);line-height:1.5}
-
-  /* ---- comparison ---- */
-  .tablewrap{border:1px solid var(--line);border-radius:var(--r);overflow:auto;background:var(--bg-2);-webkit-overflow-scrolling:touch}
-  table{width:100%;min-width:640px;border-collapse:collapse;font-size:14.5px}
-  th,td{padding:15px 16px;text-align:left;border-bottom:1px solid var(--line)}
-  thead th{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);font-weight:500;background:#100d0b}
-  th:first-child,td:first-child{text-align:left}
-  th:not(:first-child),td:not(:first-child){text-align:center;width:130px}
-  tbody tr:last-child td{border-bottom:none}
-  tr.me-row{background:linear-gradient(90deg,rgba(16,185,129,.08),transparent)}
-  tr.me-row td:first-child{font-weight:700;color:var(--ink)}
-  td .y{color:var(--green-2);font-family:var(--mono);font-weight:700}
-  td .meh{color:var(--ink-dim);font-family:var(--mono);font-size:12px}
-  td .no{color:var(--amber);font-family:var(--mono);font-size:12px}
-  .rowname{display:flex;flex-direction:column;gap:2px}
-  .rowname small{font-family:var(--mono);font-size:11px;color:var(--ink-dim);font-weight:400}
-  .tbl-note{font-size:13.5px;color:var(--ink-dim);margin-top:14px;font-style:italic}
-
-  /* ---- commands showcase ---- */
-  .cmds{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
-  .cmd-card{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:16px 18px;transition:.2s;display:flex;flex-direction:column;gap:5px}
-  .cmd-card:hover{border-color:var(--line-2);background:var(--bg-3)}
-  .cmd-card .c{font-family:var(--mono);font-size:14px;color:var(--amber-2);font-weight:500;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .cmd-card .c .i{width:16px;height:16px}
-  .cmd-card .c .arg{color:var(--ink)}
-  .cmd-card p{font-size:13.5px;color:var(--ink-dim)}
-  .cmds-note{margin-top:20px;font-size:14.5px;color:var(--ink-dim);border-left:2px solid var(--line-2);padding-left:14px}
 
   /* ---- install ---- */
   .install-grid{display:grid;grid-template-columns:.85fr 1.15fr;gap:30px;align-items:start}
@@ -294,15 +261,14 @@
   /* never let content vanish in print / screenshots / reduced-motion */
   @media print,(prefers-reduced-motion:reduce){
     .js .reveal,.reveal{opacity:1!important;transform:none!important;transition:none!important}
-    .msg,.typing{opacity:1!important;transform:none!important;animation:none!important;height:auto!important}
-    .typing{display:none!important}
-    .blink,.caret,.dot,.card,.btn{animation:none!important;transition:none!important}
+    .msg{opacity:1!important;transform:none!important;animation:none!important}
+    .blink,.caret,.dot,.btn{animation:none!important;transition:none!important}
   }
 
   /* ---- responsive ---- */
   @media(max-width:920px){
     .hero-grid{grid-template-columns:1fr;gap:44px}
-    .three,.checks,.cmds{grid-template-columns:1fr}
+    .checks{grid-template-columns:1fr}
     .allowed,.install-grid{grid-template-columns:1fr;gap:24px}
     .nav-links{display:none}
     .nav-links.open{display:flex;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:0;background:var(--bg-2);border-bottom:1px solid var(--line);padding:8px 0}
@@ -319,8 +285,6 @@
     .cmd{width:100%}
     .cmd .copy{flex-basis:58px;padding:0 10px}
     .phone{width:min(304px,100%)}
-    .card{padding:24px 22px}
-    th:not(:first-child),td:not(:first-child){width:auto;padding:12px 10px}
     .flow-diagram{flex-direction:column;align-items:stretch;padding:28px 22px}
     .arrow .i{transform:rotate(90deg);margin:auto}
     .term-body{font-size:11.5px}
@@ -354,6 +318,7 @@
       <a href="#allowed">Subscription use</a>
       <a href="#security">Security</a>
       <a href="#install">Install</a>
+      <a href="#faq">FAQ</a>
       <a class="btn" href="https://github.com/samuelkimanikamau/claudebot" target="_blank" rel="noopener"><svg class="i" aria-hidden="true"><use href="#i-github"></use></svg> GitHub</a>
     </div>
   </div>
@@ -365,7 +330,7 @@
     <div>
       <span class="pill">Open source · self-hosted</span>
       <h1>Run Claude Code<br><span class="line2">from your phone.</span></h1>
-      <p class="lede">Drive the real <b><span class="mono">claude</span></b> binary from Telegram — on your machine, on the Pro or Max plan you already pay for. No API key, no extra bill.</p>
+      <p class="lede">Drive the real <b><span class="mono">claude</span></b> binary from Telegram — on your machine, on the Claude subscription you already pay for. No API key, no extra bill.</p>
 
       <div class="cmd">
         <span class="ps1">$</span>
@@ -393,13 +358,13 @@
               <div class="tg-status"><span class="dot"></span> online · driving claude</div>
             </div>
           </div>
-          <div class="chat">
-            <div class="msg me d1">ship the auth fix &amp; run the tests<div class="stamp">09:41</div></div>
-            <div class="typing"><i></i><i></i><i></i></div>
-            <div class="msg bot d2"><span class="h">claudebot</span>On it, editing <span class="mono" style="color:var(--amber-2)">auth.py</span>, running the suite…<div class="row"><svg class="i ok" aria-hidden="true"><use href="#i-play"></use></svg> Bash · pytest -q</div></div>
-            <div class="msg bot d3"><span class="h">claudebot</span><b>Done.</b> Fixed the token refresh race; <span class="grn">38 passed</span> in 0.9s. Pushed to <span class="mono">main</span>.<span class="caret"></span></div>
-            <div class="msg me d4">/model opus<div class="stamp">09:42</div></div>
-            <div class="msg bot d5"><span class="h">claudebot</span>model set to opus · fresh session</div>
+          <div class="chat" role="img" aria-label="Demo conversation: the owner sends a screenshot, Claude diagnoses the bug, switches project with /cd, then ships a fix with all tests passing.">
+            <div class="msg me d1"><span class="imgchip"><svg class="i" aria-hidden="true"><use href="#i-camera"></use></svg> screenshot.png</span>what's breaking here?<div class="stamp">09:41</div></div>
+            <div class="msg bot d2"><span class="h">claudebot</span>CORS — staging rejects the app origin. Patching <span class="mono" style="color:var(--amber-2)">nginx.conf</span>…<div class="row"><svg class="i ok" aria-hidden="true"><use href="#i-play"></use></svg> Read · screenshot.png</div></div>
+            <div class="msg me d3">/cd ~/work/tikiti<div class="stamp">09:42</div></div>
+            <div class="msg bot d4"><span class="h">claudebot</span>📁 ~/work/tikiti · fresh session</div>
+            <div class="msg me d5">ship the auth fix &amp; run the tests</div>
+            <div class="msg bot d6"><span class="h">claudebot</span><b>Done.</b> Fixed the refresh race; <span class="grn">59 passed</span> in 0.3s. Pushed to <span class="mono">main</span>.<span class="caret"></span><div class="row"><svg class="i ok" aria-hidden="true"><use href="#i-play"></use></svg> Bash · pytest -q</div></div>
           </div>
         </div>
       </div>
@@ -435,8 +400,8 @@
   <div class="wrap">
     <div class="sec-head reveal">
       <span class="sec-num">Subscription use</span>
-      <h2>Subscription use.</h2>
-      <span class="sub">Don't share your subscription.</span>
+      <h2>The token never leaves the binary.</h2>
+      <span class="sub">Don't share your subscription — and don't move its credentials.</span>
     </div>
     <div class="allowed">
       <div class="prose reveal">
@@ -447,7 +412,7 @@
       <div class="lines reveal">
         <div class="ln"><span class="x">01</span><div><b>Single-user.</b><p>Gate it to your own Telegram ID. Letting others use your plan is account sharing.</p></div></div>
         <div class="ln"><span class="x">02</span><div><b>Never extract the token.</b><p>Let Claude Code handle auth. Don't lift credentials into another tool.</p></div></div>
-        <div class="ln"><span class="x">03</span><div><b>Don't run it 24/7.</b><p>Use it like a remote terminal, not an unattended job runner.</p></div></div>
+        <div class="ln"><span class="x">03</span><div><b>Always available ≠ unattended.</b><p>The service keeps the bot reachable; the use stays interactive — you on one end, not scheduled jobs.</p></div></div>
       </div>
     </div>
   </div>
@@ -479,8 +444,8 @@
   <div class="wrap">
     <div class="sec-head reveal">
       <span class="sec-num">Install</span>
-      <h2>Install claudebot.</h2>
-      <span class="sub">One command. Make sure Claude Code is logged in, create a Telegram bot, then run the installer.</span>
+      <h2>Up and running in three commands.</h2>
+      <span class="sub">Make sure Claude Code is logged in, create a Telegram bot, then run the installer.</span>
     </div>
     <div class="install-grid">
       <div class="pre reveal">
@@ -525,10 +490,13 @@
   <div class="wrap">
     <div class="sec-head reveal">
       <span class="sec-num">FAQ</span>
-      <h2>Questions.</h2>
+      <h2>Straight answers.</h2>
     </div>
     <div class="faq reveal">
-      <details open><summary>Can I add my team? <span class="plus">+</span></summary><p>No. That's account sharing, and it hands them a shell on your machine. One Telegram ID — yours.</p></details>
+      <details open><summary>Does my computer need to stay on? <span class="plus">+</span></summary><p>Yes — claudebot runs Claude Code <b>on your machine</b>, so the machine must be awake to answer. The service (launchd / systemd) keeps the bot alive through crashes and reboots, and every chat resumes exactly where it left off.</p></details>
+      <details><summary>Can I work on multiple projects? <span class="plus">+</span></summary><p>Yes. <span class="code">/cd ~/path</span> moves a chat to another project and sticks across restarts. For two fully separate bots — say work and personal — <span class="code">claudebot --instance work setup</span> stands one up with its own token, state, and service.</p></details>
+      <details><summary>What leaves my machine? <span class="plus">+</span></summary><p>Only the Telegram chat traffic. Inference goes through Claude Code exactly as it does at your desk — no third-party servers in between, and no API key anywhere.</p></details>
+      <details><summary>Can I add my team? <span class="plus">+</span></summary><p>No. That's account sharing, and it hands them a shell on your machine. One Telegram ID — yours.</p></details>
       <details><summary>What does it cost? <span class="plus">+</span></summary><p>Nothing beyond the Claude plan you already pay for. claudebot is <b>free and MIT-licensed</b>.</p></details>
       <details><summary>Will this get my account banned? <span class="plus">+</span></summary><p>It depends how you use it. Stay single-user, never extract the token, no unattended loops — see <a href="#allowed" style="color:var(--amber-2)">Subscription use</a>.</p></details>
     </div>

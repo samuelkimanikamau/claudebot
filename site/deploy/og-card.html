@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<!-- Source for site/og.png (1200x630). Regenerate with:
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+    --screenshot=site/og.png --window-size=1200,630 --hide-scrollbars \
+    "file://$PWD/site/deploy/og-card.html"
+  (deploy/ is excluded from the rsync, so this file never ships.) -->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1200px;height:630px;overflow:hidden}
+  body{
+    background:#0a0a0a;color:#fff;
+    font-family:-apple-system,"Helvetica Neue",sans-serif;
+    -webkit-font-smoothing:antialiased;position:relative;
+  }
+  .glow{position:absolute;inset:0;
+    background:
+      radial-gradient(560px 460px at 82% 24%, rgba(16,185,129,.14), transparent 58%),
+      radial-gradient(640px 520px at 8% 90%, rgba(16,185,129,.07), transparent 55%),
+      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px) 0 0/64px 64px,
+      linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px) 0 0/64px 64px}
+  .in{position:relative;height:100%;display:flex;align-items:center;gap:64px;padding:0 84px}
+  .left{flex:1}
+  .brand{display:flex;align-items:center;gap:14px;font-weight:700;font-size:30px;letter-spacing:-0.03em}
+  .logo{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;
+    background:linear-gradient(150deg,#10b981,#059669)}
+  .logo svg{width:26px;height:26px;stroke:#000;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  h1{font-size:74px;font-weight:900;letter-spacing:-0.045em;line-height:1.02;margin-top:38px}
+  h1 .g{color:#10b981}
+  .sub{margin-top:26px;font-size:27px;color:rgba(255,255,255,.74);letter-spacing:-0.01em;line-height:1.45;max-width:21ch}
+  .meta{margin-top:34px;font-family:"SF Mono",Menlo,monospace;font-size:17px;color:#34d399}
+  .phone{width:330px;background:#111;border:1px solid #27272a;border-radius:30px;padding:11px;
+    box-shadow:0 40px 90px -40px #000, 0 0 0 1px rgba(16,185,129,.1)}
+  .screen{background:#100d0b;border-radius:21px;overflow:hidden;border:1px solid #1f1f1f}
+  .head{display:flex;align-items:center;gap:11px;padding:15px;border-bottom:1px solid #1f1f1f;background:#15110e}
+  .av{width:36px;height:36px;border-radius:50%;background:linear-gradient(150deg,#10b981,#059669)}
+  .nm{font-weight:700;font-size:15px}
+  .st{font-size:12px;color:#34d399;font-family:"SF Mono",Menlo,monospace}
+  .chat{padding:16px 13px 20px;display:flex;flex-direction:column;gap:10px}
+  .m{max-width:86%;padding:9px 13px;border-radius:15px;font-size:13.5px;line-height:1.5}
+  .me{align-self:flex-end;background:linear-gradient(160deg,#059669,#047857);color:#ecfdf5;border-bottom-right-radius:5px}
+  .bot{align-self:flex-start;background:#1f1f1f;border:1px solid #27272a;border-bottom-left-radius:5px}
+  .bot .h{color:#34d399;font-weight:700;display:block;margin-bottom:3px;font-size:12.5px}
+  .grn{color:#34d399}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="in">
+  <div class="left">
+    <div class="brand"><span class="logo"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m8 10 3 2-3 2"/><path d="M13 15h3"/></svg></span> claudebot</div>
+    <h1>Run Claude Code<br /><span class="g">from your phone.</span></h1>
+    <p class="sub">The real claude binary, on your machine, over Telegram.</p>
+    <p class="meta">$ curl -fsSL claudebot.ve.ke/install.sh | bash</p>
+  </div>
+  <div class="phone">
+    <div class="screen">
+      <div class="head"><span class="av"></span><div><div class="nm">claudebot</div><div class="st">● online · driving claude</div></div></div>
+      <div class="chat">
+        <div class="m me">ship the auth fix &amp; run the tests</div>
+        <div class="m bot"><span class="h">claudebot</span><b>Done.</b> Fixed the refresh race; <span class="grn">59 passed</span>. Pushed to main.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
