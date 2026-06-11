@@ -2,6 +2,16 @@
 
 **An always-on Telegram bot that drives the real Claude Code on your subscription.**
 
+[![CI](https://github.com/samuelkimanikamau/claudebot/actions/workflows/ci.yml/badge.svg)](https://github.com/samuelkimanikamau/claudebot/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-10b981.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
+
+**[claudebot.ve.ke](https://claudebot.ve.ke)** · [Install](#install) · [Is this allowed?](#is-this-allowed) · [How it works](#how-it-works)
+
+![Run Claude Code from your phone — the real claude binary, on your machine, over Telegram](site/og.png)
+<!-- TODO before HN launch: replace og.png with a ~30s demo GIF — phone on the
+     left, terminal/git log on the right; send a task, watch it stream, tap Stop. -->
+
 `claudebot` is a thin, self-hosted Telegram front-end for the genuine `claude`
 binary. It talks to Claude Code over its headless `stream-json` protocol on your
 logged-in Pro/Max subscription — **no API key, no Claude Agent SDK, no official
@@ -70,8 +80,11 @@ path: `claude -p`/`--output-format stream-json` on a subscription is documented,
 ### One-liner (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/samuelkimanikamau/claudebot/main/scripts/install.sh | bash
+curl -fsSL https://claudebot.ve.ke/install.sh | bash
 ```
+
+(or the same script straight from this repo:
+`curl -fsSL https://raw.githubusercontent.com/samuelkimanikamau/claudebot/main/scripts/install.sh | bash`)
 
 The installer creates an isolated venv at `~/.claudebot/venv`, links `claudebot`
 into `~/.local/bin`, then runs the setup wizard and offers to install the
@@ -150,9 +163,14 @@ Just message it. Slash commands:
 | `/cost <on|off>` | Toggle cost footer after replies |
 | `/timeout <seconds>` | Set per-turn timeout (`0` disables) |
 | `/idle <seconds>` | Set idle child eviction timeout (`0` disables) |
-| `/cd <path>` | Switch the working directory (starts a fresh session there) |
+| `/cd <path>` | Switch the working directory (persists; starts a fresh session there) |
 | `/retry` | Resend your last message |
 | `/stop` | Abort the current turn (kills the child; context resumes next message) |
+
+The bot **reacts 👀** the instant it accepts your message. While a reply streams,
+an inline **🛑 Stop** button rides the message — tap it instead of typing `/stop`.
+Bare `/model`, `/effort`, and `/mode` show **tap-to-set keyboards**, so you never
+have to remember the values.
 
 Send a **photo or a document** (PDF, code, logs, …) and Claude will read it.
 Replies **stream** in live — head-first into stable message blocks that are
