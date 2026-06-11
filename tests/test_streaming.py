@@ -89,15 +89,21 @@ class RecordBot:
         self.sent: list[tuple[str, str | None, int]] = []
         self.edited: list[tuple[str, str | None, int]] = []
         self.deleted: list[int] = []
+        self.send_markups: list[object] = []  # reply_markup per send, in order
+        self.markup_cleared: list[int] = []  # message_ids whose keyboard was removed
         self._next = 0
 
-    async def send_message(self, chat_id, text, parse_mode=None):
+    async def send_message(self, chat_id, text, parse_mode=None, reply_markup=None):
         self._next += 1
         self.sent.append((text, parse_mode, self._next))
+        self.send_markups.append(reply_markup)
         return FakeMessage(self._next)
 
-    async def edit_message_text(self, text, chat_id, message_id, parse_mode=None):
+    async def edit_message_text(self, text, chat_id, message_id, parse_mode=None, reply_markup=None):
         self.edited.append((text, parse_mode, message_id))
+
+    async def edit_message_reply_markup(self, chat_id, message_id, reply_markup=None):
+        self.markup_cleared.append(message_id)
 
     async def delete_message(self, chat_id, message_id):
         self.deleted.append(message_id)
@@ -119,6 +125,31 @@ async def test_progressive_streaming_preserves_head_no_reorder():
     assert streamer._block_ids[0] == head_id
     assert any(mid == head_id and text.startswith("A") for text, _m, mid in bot.edited)
     assert len(bot.sent) == 2  # no extra head message created at finalize
+
+
+async def test_stop_button_rides_first_block_and_clears_on_finalize():
+    bot = RecordBot()
+    button = object()  # opaque markup — Streamer must not introspect it
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False), live_markup=button)
+    streamer._buffer = "A" * 3500 + "\n" + "B" * 1000  # 2 blocks
+    await streamer._preview_now()
+    assert bot.send_markups[0] is button  # block 0 carries the Stop button
+    assert bot.send_markups[1] is None  # later blocks don't
+    await streamer.finalize(streamer._buffer)
+    assert streamer._block_ids[0] in bot.markup_cleared  # button removed when done
+
+
+async def test_error_replaces_head_and_deletes_later_blocks():
+    bot = RecordBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
+    streamer._buffer = "A" * 3500 + "\n" + "B" * 1000  # streamed as 2 blocks
+    await streamer._preview_now()
+    head_id, stale_id = streamer._block_ids
+    await streamer.error("⚠️ boom")
+    # The head bubble shows the error; the trailing partial bubble is removed.
+    assert any(text == "⚠️ boom" and mid == head_id for text, _m, mid in bot.edited)
+    assert stale_id in bot.deleted
+    assert streamer._block_ids == [head_id]
 
 
 async def test_finalize_deletes_leftover_blocks_when_reply_shrinks():

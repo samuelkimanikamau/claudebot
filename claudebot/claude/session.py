@@ -62,6 +62,10 @@ class _ChildGone(Exception):
     """The claude child exited mid-turn; the caller should respawn and retry."""
 
 
+class SessionBusy(Exception):
+    """A turn is already in flight for this chat (raised by ``ask(nowait=True)``)."""
+
+
 @dataclass(slots=True)
 class TurnResult:
     text: str
@@ -79,10 +83,12 @@ class ClaudeSession:
         session_id: str | None = None,
         is_new: bool = True,
         working_dir: Path | None = None,
+        on_session_id_change: Callable[[int, str], None] | None = None,
     ) -> None:
         self.chat_id = chat_id
         self.settings = settings
         self.session_id = session_id or str(uuid.uuid4())
+        self._on_session_id_change = on_session_id_change
         self.working_dir = working_dir or settings.working_dir
         self.last_activity = time.monotonic()
 
@@ -113,8 +119,17 @@ class ClaudeSession:
         *,
         on_event: EventCallback | None = None,
         image_paths: Sequence[Path] | None = None,
+        nowait: bool = False,
     ) -> TurnResult:
-        """Send one user turn and return Claude's reply. Serialized per chat."""
+        """Send one user turn and return Claude's reply. Serialized per chat.
+
+        With ``nowait=True`` a busy session raises :class:`SessionBusy` instead of
+        queuing behind the in-flight turn — this closes the gap between a caller's
+        ``busy`` check and the lock acquisition (a message racing in through that
+        window would otherwise run silently after the current turn).
+        """
+        if nowait and self._lock.locked():
+            raise SessionBusy(f"chat {self.chat_id}: a turn is already in flight")
         async with self._lock:
             if not self.is_alive:
                 self._stopping = False
@@ -333,12 +348,25 @@ class ClaudeSession:
                 if event is None:
                     continue
                 if event.session_id:
-                    self.session_id = event.session_id  # authoritative id
+                    self._set_session_id(event.session_id)  # authoritative id
                 await self._queue.put(event)
         except Exception as exc:
             log.debug("chat %s: stdout reader stopped: %s", self.chat_id, exc)
         finally:
             await self._queue.put(_EOF)
+
+    def _set_session_id(self, sid: str) -> None:
+        """Adopt the stream's session id; ``--resume`` forks to a NEW id, so the
+        owner (SessionManager) must hear about it or a restart resumes the stale
+        pre-fork id and silently loses every turn since."""
+        if sid == self.session_id:
+            return
+        self.session_id = sid
+        if self._on_session_id_change is not None:
+            try:
+                self._on_session_id_change(self.chat_id, sid)
+            except Exception as exc:  # noqa: BLE001 - persistence must not kill the reader
+                log.warning("chat %s: session-id change hook failed: %s", self.chat_id, exc)
 
     async def _read_stderr(self) -> None:
         proc = self._proc

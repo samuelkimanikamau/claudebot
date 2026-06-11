@@ -81,3 +81,23 @@ def test_chunk_text_prefers_newline_boundary():
 def test_chunk_text_hard_split_when_no_newline():
     chunks = chunk_text("x" * 9000, limit=4000)
     assert [len(c) for c in chunks] == [4000, 4000, 1000]
+
+
+def test_chunk_text_balances_fence_across_boundary():
+    """A ``` fence spanning a chunk boundary is closed and reopened (with its
+    language) so each chunk is self-contained markdown."""
+    code = "\n".join("line %03d" % i for i in range(200))
+    text = f"intro\n```python\n{code}\n```\nafter"
+    chunks = chunk_text(text, limit=1000)
+    assert len(chunks) > 1
+    for chunk in chunks:
+        fence_lines = [ln for ln in chunk.splitlines() if ln.lstrip().startswith("```")]
+        assert len(fence_lines) % 2 == 0  # every chunk stands alone
+    assert chunks[1].startswith("```python\n")  # language survives the reopen
+    assert chunks[-1].endswith("after")  # prose after the fence stays prose
+
+
+def test_chunk_text_no_fence_untouched():
+    text = ("a" * 900 + "\n") * 3
+    chunks = chunk_text(text, limit=1000)
+    assert "```" not in "".join(chunks)

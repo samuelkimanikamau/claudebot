@@ -13,13 +13,14 @@ import fcntl
 import re
 from pathlib import Path
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.error import TelegramError
 from telegram.ext import (
     AIORateLimiter,
     Application,
     ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -28,6 +29,7 @@ from telegram.ext import (
 
 from claudebot import version_string
 from claudebot.claude.manager import SessionManager
+from claudebot.claude.session import SessionBusy
 from claudebot.core.config import PERMISSION_MODES, Settings
 from claudebot.core.logging import get_logger
 from claudebot.core.paths import ensure_state_dir, state_dir
@@ -88,6 +90,30 @@ _FIELD_FOR = {
 _CLEAR_VALUES = {"default", "auto", "none", "off"}
 _TRUE_VALUES = {"1", "true", "yes", "y", "on", "enable", "enabled"}
 _FALSE_VALUES = {"0", "false", "no", "n", "off", "disable", "disabled"}
+
+# Inline keyboard shown on the streaming reply while a turn runs (tap > typing /stop).
+_STOP_CALLBACK = "turn:stop"
+_STOP_MARKUP = InlineKeyboardMarkup(
+    [[InlineKeyboardButton("🛑 Stop", callback_data=_STOP_CALLBACK)]]
+)
+# Option keyboards for the runtime commands that have a small, known value set.
+_KEYBOARD_OPTIONS: dict[str, tuple[str, ...]] = {
+    "model": ("default", "opus", "sonnet", "haiku"),
+    "effort": ("default", "low", "medium", "high", "xhigh", "max"),
+    "mode": PERMISSION_MODES,
+}
+
+
+def _options_keyboard(key: str) -> InlineKeyboardMarkup | None:
+    """A tap-to-set keyboard for /model, /effort, /mode — None for free-form keys."""
+    options = _KEYBOARD_OPTIONS.get(key)
+    if not options:
+        return None
+    rows = [
+        [InlineKeyboardButton(o, callback_data=f"cfg:{key}:{o}") for o in options[i : i + 3]]
+        for i in range(0, len(options), 3)
+    ]
+    return InlineKeyboardMarkup(rows)
 
 
 def _format_config(settings: Settings) -> str:
@@ -248,6 +274,7 @@ class TelegramBridge:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & private, self._on_text))
         # Catch-all for message types we don't handle (voice, video, stickers, …).
         app.add_handler(MessageHandler(private & ~filters.COMMAND, self._on_unsupported))
+        app.add_handler(CallbackQueryHandler(self._on_callback))
         app.add_error_handler(self._on_error)
         self.app = app
         return app
@@ -262,8 +289,11 @@ class TelegramBridge:
             self.settings.model or "default",
             self.settings.permission_mode,
         )
-        # Subscribe only to message updates — the only type the bot handles.
-        app.run_polling(allowed_updates=[Update.MESSAGE], drop_pending_updates=True)
+        # Messages + the inline-button taps (Stop, option keyboards) — nothing else.
+        app.run_polling(
+            allowed_updates=[Update.MESSAGE, Update.CALLBACK_QUERY],
+            drop_pending_updates=True,
+        )
 
     def _acquire_singleton_lock(self) -> None:
         """Enforce ONE poller per host: a second instance would cause a permanent 409."""
@@ -359,6 +389,14 @@ class TelegramBridge:
         chat_id = update.effective_chat.id
         args = list(ctx.args or [])
         session = await self.manager.get(chat_id)
+        if not args:
+            # Bare /model, /effort, /mode -> tap-to-set keyboard instead of usage text.
+            keyboard = _options_keyboard(key)
+            if keyboard is not None:
+                await update.effective_message.reply_text(
+                    _usage_for(key, session.settings), reply_markup=keyboard
+                )
+                return
         if key in _SESSION_RESTART_OPTIONS and args and session.busy:
             await update.effective_message.reply_text(
                 "⏳ Still working on your previous message — send /stop before changing "
@@ -386,7 +424,10 @@ class TelegramBridge:
         if not path.is_dir():
             await update.effective_message.reply_text(f"❌ Not a directory: {path}")
             return
-        await self.manager.reset(update.effective_chat.id, working_dir=path)
+        # Persist as a per-chat override so the directory survives restarts and
+        # the fresh sessions started by /model, /effort, /mode.
+        self.manager.persist_override(update.effective_chat.id, "working_dir", str(path))
+        await self.manager.reset(update.effective_chat.id)
         await update.effective_message.reply_text(f"📁 Working dir set to {path}\nStarted a fresh session there.")
 
     async def _cmd_stop(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -404,9 +445,74 @@ class TelegramBridge:
             return
         last = self._last_text.get(update.effective_chat.id)
         if not last:
-            await update.effective_message.reply_text("Nothing to retry yet.")
+            await update.effective_message.reply_text(
+                "Nothing to retry (photos and documents can't be replayed — resend them)."
+            )
             return
         await self._handle(update, ctx, last)
+
+    # --- inline-button taps ---------------------------------------------------
+
+    async def _on_callback(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if query is None:
+            return
+        user = update.effective_user
+        if not is_allowed(user.id if user else None, self.settings):
+            with contextlib.suppress(TelegramError):
+                await query.answer("⛔ Not authorized.")
+            return
+        chat_id = update.effective_chat.id
+        data = query.data or ""
+
+        if data == _STOP_CALLBACK:
+            session = await self.manager.get(chat_id)
+            if session.busy:
+                await session.interrupt()
+                with contextlib.suppress(TelegramError):
+                    await query.answer("🛑 Stopping…")
+            else:
+                with contextlib.suppress(TelegramError):
+                    await query.answer("Nothing is running.")
+            return
+
+        if data.startswith("cfg:"):
+            try:
+                _, key, value = data.split(":", 2)
+            except ValueError:
+                with contextlib.suppress(TelegramError):
+                    await query.answer()
+                return
+            if key not in _KEYBOARD_OPTIONS:
+                with contextlib.suppress(TelegramError):
+                    await query.answer()
+                return
+            session = await self.manager.get(chat_id)
+            if key in _SESSION_RESTART_OPTIONS and session.busy:
+                with contextlib.suppress(TelegramError):
+                    await query.answer("⏳ Still working — send /stop first.")
+                return
+            changed, needs_fresh_session, message = _apply_runtime_setting(
+                session.settings, key, [value]
+            )
+            if changed:
+                field = _FIELD_FOR.get(key)
+                if field is not None:
+                    self.manager.persist_override(
+                        chat_id, field, getattr(session.settings, field)
+                    )
+                if needs_fresh_session:
+                    await self.manager.reset(chat_id)
+                    message += "\n🆕 Started a fresh conversation with the new setting."
+            with contextlib.suppress(TelegramError):
+                await query.answer()
+            # Replace the keyboard message with the outcome, like the typed command would.
+            with contextlib.suppress(TelegramError):
+                await query.edit_message_text(message)
+            return
+
+        with contextlib.suppress(TelegramError):
+            await query.answer()
 
     # --- messages -----------------------------------------------------------
 
@@ -485,24 +591,32 @@ class TelegramBridge:
         text = text.strip()
         if not text and not image_paths:
             return
-        if text:
+        if image_paths:
+            # A media turn can't be replayed (the file is deleted after the turn) —
+            # drop the retry buffer rather than letting /retry resend a stale prompt.
+            self._last_text.pop(chat_id, None)
+        elif text:
             self._last_text[chat_id] = text  # for /retry
         session = await self.manager.get(chat_id)
         # Don't pile turns onto a busy session — tell the user instead of silently queuing.
         if session.busy:
-            with contextlib.suppress(TelegramError):
-                await update.effective_message.reply_text(
-                    "⏳ Still working on your previous message — send /stop to abort it."
-                )
+            await self._reply_busy(update)
             self._cleanup_files(image_paths)
             return
-        streamer = Streamer(ctx.bot, chat_id, session.settings)
+        # Instant "got it" ack — cheaper and quieter than an extra message.
+        with contextlib.suppress(TelegramError):
+            await update.effective_message.set_reaction("👀")
+        streamer = Streamer(ctx.bot, chat_id, session.settings, live_markup=_STOP_MARKUP)
         try:
             async with _typing(ctx.bot, chat_id):
                 try:
                     result = await session.ask(
-                        text, on_event=streamer.on_event, image_paths=image_paths
+                        text, on_event=streamer.on_event, image_paths=image_paths, nowait=True
                     )
+                except SessionBusy:
+                    # A racing message slipped past the busy check above.
+                    await self._reply_busy(update)
+                    return
                 except Exception:  # noqa: BLE001 - surface a generic failure, log details
                     log.exception("chat %s: turn failed", chat_id)
                     await streamer.error("⚠️ Error talking to Claude — check the logs.")
@@ -516,6 +630,12 @@ class TelegramBridge:
                     await ctx.bot.send_message(chat_id, f"💸 cost: ${result.cost:.4f}")
         finally:
             self._cleanup_files(image_paths)
+
+    async def _reply_busy(self, update: Update) -> None:
+        with contextlib.suppress(TelegramError):
+            await update.effective_message.reply_text(
+                "⏳ Still working on your previous message — send /stop to abort it."
+            )
 
     @staticmethod
     def _cleanup_files(paths: list[Path] | None) -> None:

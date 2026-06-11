@@ -32,7 +32,13 @@ _RAW_LIMIT = 3500           # block/chunk boundary; leaves room for MarkdownV2 e
 
 
 def chunk_text(text: str, limit: int = _RAW_LIMIT) -> list[str]:
-    """Split text into <=limit pieces, preferring newline boundaries."""
+    """Split text into <=limit pieces, preferring newline boundaries.
+
+    Chunks are fence-balanced: a ``` code block that spans a boundary is closed
+    at the end of one chunk and reopened (same language) at the start of the
+    next, so each Telegram message converts to MarkdownV2 on its own instead of
+    rendering the continuation as mangled half-fence soup.
+    """
     text = text or ""
     if len(text) <= limit:
         return [text]
@@ -49,16 +55,37 @@ def chunk_text(text: str, limit: int = _RAW_LIMIT) -> list[str]:
             rest = rest[1:]
     if rest:
         chunks.append(rest)
-    return chunks
+    return _balance_fences(chunks)
+
+
+def _balance_fences(chunks: list[str]) -> list[str]:
+    """Close/reopen ``` fences at chunk boundaries so every chunk stands alone."""
+    open_info: str | None = None  # info string of the fence open at this point
+    balanced: list[str] = []
+    for chunk in chunks:
+        was_open = open_info
+        for line in chunk.splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith("```"):
+                open_info = stripped[3:].strip() if open_info is None else None
+        if was_open is not None:
+            chunk = f"```{was_open}\n{chunk}"
+        if open_info is not None:
+            chunk = f"{chunk}\n```"
+        balanced.append(chunk)
+    return balanced
 
 
 class Streamer:
-    def __init__(self, bot, chat_id: int, settings: Settings) -> None:
+    def __init__(self, bot, chat_id: int, settings: Settings, *, live_markup=None) -> None:
         self.bot = bot
         self.chat_id = chat_id
         self.edit_interval = settings.edit_interval
         self.stream_partials = settings.stream_partials
         self.markdown = settings.markdown
+        # Inline keyboard (e.g. a Stop button) shown on the FIRST streamed block
+        # while the turn is live; cleared again on finalize()/error().
+        self._live_markup = live_markup
         self._buffer = ""
         # One Telegram message per streamed block; _block_last[i] is the plain text
         # last shown in block i (to skip 'not modified' edits).
@@ -124,15 +151,18 @@ class Streamer:
             return
         try:
             for i, blk in enumerate(blocks):
+                # Stop button rides on block 0 only (omit the kwarg entirely when
+                # unused so test fakes with narrow signatures keep working).
+                kw = {"reply_markup": self._live_markup} if i == 0 and self._live_markup else {}
                 if i < len(self._block_ids):
                     if self._block_last[i] == blk:
                         continue  # unchanged -> skip ('message is not modified')
                     await self.bot.edit_message_text(
-                        blk, chat_id=self.chat_id, message_id=self._block_ids[i]
+                        blk, chat_id=self.chat_id, message_id=self._block_ids[i], **kw
                     )
                     self._block_last[i] = blk
                 else:
-                    msg = await self.bot.send_message(self.chat_id, blk)
+                    msg = await self.bot.send_message(self.chat_id, blk, **kw)
                     self._block_ids.append(msg.message_id)
                     self._block_last.append(blk)
             self._last_edit = time.monotonic()
@@ -175,6 +205,7 @@ class Streamer:
                 )
         del self._block_ids[len(chunks):]
         del self._block_last[len(chunks):]
+        await self._clear_live_markup()
 
     async def _send(self, raw: str, edit_id: int | None) -> int | None:
         """Send/edit one chunk: MarkdownV2 first, then plain text on rejection."""
@@ -222,3 +253,23 @@ class Streamer:
         except TelegramError:
             with contextlib.suppress(TelegramError):
                 await self.bot.send_message(self.chat_id, message)
+        # Drop any later streamed blocks so stale partial content isn't left behind.
+        for mid in self._block_ids[1:]:
+            with contextlib.suppress(TelegramError):
+                await self.bot.delete_message(chat_id=self.chat_id, message_id=mid)
+        del self._block_ids[1:]
+        del self._block_last[1:]
+        await self._clear_live_markup()
+
+    async def _clear_live_markup(self) -> None:
+        """Drop the live Stop keyboard from block 0 once the turn is over.
+
+        The finalize edit usually clears it implicitly, but a 'message is not
+        modified' outcome (final text == streamed text) would leave it stranded.
+        """
+        if self._live_markup is None or not self._block_ids:
+            return
+        with contextlib.suppress(TelegramError):
+            await self.bot.edit_message_reply_markup(
+                chat_id=self.chat_id, message_id=self._block_ids[0], reply_markup=None
+            )

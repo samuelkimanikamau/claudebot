@@ -2,7 +2,15 @@
 
 import asyncio
 
-from claudebot.claude.session import SAFETY_PREAMBLE, ClaudeSession, TurnResult, _ChildGone
+import pytest
+
+from claudebot.claude.session import (
+    SAFETY_PREAMBLE,
+    ClaudeSession,
+    SessionBusy,
+    TurnResult,
+    _ChildGone,
+)
 from claudebot.core.config import Settings
 
 
@@ -45,6 +53,17 @@ def test_build_args_resume_uses_resume_flag():
 def test_turn_timeout_setting_present():
     assert _settings().turn_timeout == 1800
     assert _settings(turn_timeout=0).turn_timeout == 0
+
+
+async def test_ask_nowait_rejects_while_turn_in_flight():
+    """A message racing in mid-turn must be rejected, not silently queued."""
+    session = ClaudeSession(1, _settings())
+    await session._lock.acquire()  # simulate an in-flight turn holding the lock
+    try:
+        with pytest.raises(SessionBusy):
+            await session.ask("racing message", nowait=True)
+    finally:
+        session._lock.release()
 
 
 async def test_stop_during_inflight_turn_does_not_respawn(monkeypatch):

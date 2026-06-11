@@ -78,12 +78,20 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
 
     check(f"Python {platform.python_version()}", sys.version_info >= (3, 10))
 
-    claude = shutil.which("claude")
-    if check("claude binary on PATH", bool(claude), claude or "not found — install Claude Code"):
+    # Check the binary the bot will actually spawn (claude_binary may be a custom path).
+    claude_bin = "claude"
+    try:
+        claude_bin = load_settings().claude_binary
+    except Exception:  # noqa: BLE001 - doctor must run before config exists too
+        pass
+    claude = shutil.which(claude_bin)
+    if check(
+        "claude binary on PATH", bool(claude), claude or f"{claude_bin!r} not found — install Claude Code"
+    ):
         version = subprocess.run([claude, "--version"], capture_output=True, text=True).stdout.strip()
         if version:
             print(f"     {version}")
-        status = subprocess.run(["claude", "auth", "status"], capture_output=True, text=True)
+        status = subprocess.run([claude, "auth", "status"], capture_output=True, text=True)
         logged_in = False
         detail = "run: claude auth login"
         try:
@@ -253,6 +261,14 @@ def cmd_update(args: argparse.Namespace) -> int:
 def _rollback(src: Path, target_py: str, pre_sha: str) -> None:
     """Revert a failed update: reset to the pre-pull commit and reinstall."""
     if not pre_sha:
+        return
+    # NEVER hard-reset over uncommitted work in the source tree.
+    dirty = subprocess.run(
+        ["git", "-C", str(src), "status", "--porcelain"], capture_output=True, text=True
+    ).stdout.strip()
+    if dirty:
+        print("⚠  uncommitted local changes in the source tree — not resetting automatically.")
+        print(f"   Roll back yourself when ready:  git -C {src} reset --hard {pre_sha[:8]}")
         return
     print(f"↩  rolling back to {pre_sha[:8]} and reinstalling…")
     subprocess.run(["git", "-C", str(src), "reset", "--hard", pre_sha])

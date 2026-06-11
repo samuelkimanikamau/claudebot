@@ -1,7 +1,14 @@
 """Unit tests for Telegram command helpers."""
 
-from claudebot.core.config import Settings
-from claudebot.telegram.bridge import _COMMANDS, _apply_runtime_setting, _format_config
+from claudebot.core.config import PERMISSION_MODES, Settings
+from claudebot.telegram.bridge import (
+    _COMMANDS,
+    _STOP_CALLBACK,
+    _STOP_MARKUP,
+    _apply_runtime_setting,
+    _format_config,
+    _options_keyboard,
+)
 
 
 def _settings(**kw) -> Settings:
@@ -64,3 +71,27 @@ def test_apply_timeout_accepts_seconds_without_new_session():
     assert restart is False
     assert settings.turn_timeout == 600
     assert "turn timeout set to 600s" in message
+
+
+def test_options_keyboard_for_model_has_tap_targets():
+    kb = _options_keyboard("model")
+    datas = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert "cfg:model:default" in datas
+    assert "cfg:model:opus" in datas
+    assert all(len(d.encode()) <= 64 for d in datas)  # Telegram callback_data limit
+
+
+def test_options_keyboard_mode_covers_all_permission_modes():
+    kb = _options_keyboard("mode")
+    datas = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert datas == [f"cfg:mode:{m}" for m in PERMISSION_MODES]
+
+
+def test_options_keyboard_none_for_freeform_keys():
+    assert _options_keyboard("timeout") is None
+    assert _options_keyboard("cost") is None
+    assert _options_keyboard("idle") is None
+
+
+def test_stop_markup_callback_data():
+    assert _STOP_MARKUP.inline_keyboard[0][0].callback_data == _STOP_CALLBACK

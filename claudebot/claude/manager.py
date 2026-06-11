@@ -35,8 +35,10 @@ class SessionManager:
         Each ClaudeSession gets its OWN Settings, so a runtime change in one chat
         (/model, /timeout, …) never bleeds into another chat.
         """
-        override = self._overrides.get(str(chat_id))
-        return self.settings.model_copy(update=override or {})
+        override = dict(self._overrides.get(str(chat_id)) or {})
+        if "working_dir" in override:  # stored as str in overrides.json
+            override["working_dir"] = Path(str(override["working_dir"])).expanduser()
+        return self.settings.model_copy(update=override)
 
     # --- lookup -------------------------------------------------------------
 
@@ -52,14 +54,17 @@ class SessionManager:
                 self._session_settings(chat_id),
                 session_id=known_id,
                 is_new=known_id is None,
+                on_session_id_change=self._remember,
             )
             self._sessions[chat_id] = session
             if known_id is None:
                 self._remember(chat_id, session.session_id)
             return session
 
-    async def reset(self, chat_id: int, working_dir: Path | None = None) -> ClaudeSession:
-        """Start a fresh Claude conversation for this chat (used by /new and /cd)."""
+    async def reset(self, chat_id: int) -> ClaudeSession:
+        """Start a fresh Claude conversation for this chat (used by /new, /cd, and
+        the session-restart runtime commands). The working dir comes from this
+        chat's settings overrides, so a /cd survives both restarts and resets."""
         async with self._lock:
             old = self._sessions.pop(chat_id, None)
             if old is not None:
@@ -69,7 +74,7 @@ class SessionManager:
                 self._session_settings(chat_id),
                 session_id=None,
                 is_new=True,
-                working_dir=working_dir,
+                on_session_id_change=self._remember,
             )
             self._sessions[chat_id] = session
             self._remember(chat_id, session.session_id)
@@ -123,6 +128,8 @@ class SessionManager:
     # --- persistence --------------------------------------------------------
 
     def _remember(self, chat_id: int, session_id: str) -> None:
+        if self._map.get(str(chat_id)) == session_id:
+            return  # no-op — don't rewrite the file on every turn
         self._map[str(chat_id)] = session_id
         self._save_map()
 
