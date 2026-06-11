@@ -8,7 +8,7 @@
 
 **[claudebot.ve.ke](https://claudebot.ve.ke)** · [Install](#install) · [Commands](#talking-to-the-bot) · [Is this allowed?](#is-this-allowed) · [How it works](#how-it-works)
 
-![Run Claude Code from your phone — the real claude binary, on your machine, over Telegram](site/og.png)
+![Run Claude Code from your phone — the real claude binary, on your machine, over Telegram](https://claudebot.ve.ke/og.png)
 <!-- TODO before HN launch: replace og.png with a ~30s demo GIF — phone on the
      left, terminal/git log on the right; send a task, watch it stream, tap Stop. -->
 
