@@ -13,13 +13,18 @@ and you can re-shoot takes by re-planting.
 
 ## Prep (15 min, before recording)
 
-1. **Stage the repo.** Fresh clone of claudebot itself at `~/work/demo`
-   (meta: the bot fixes its own source on camera).
-   Plant the bug — one line, visually obvious diff:
+1. **Stage the repo.** A complete clone of claudebot itself lives at
+   `~/work/demo` (meta: the bot fixes its own source on camera) — full tree,
+   `.venv` with dev deps, own `.git`. Plant the bug (one line, obvious diff):
    ```bash
    cd ~/work/demo
    sed -i '' 's/_RAW_LIMIT = 3500/_RAW_LIMIT = 35/' claudebot/telegram/streaming.py
-   .venv/bin/pytest -q   # confirm: a handful of chunking tests now fail
+   .venv/bin/pytest -q   # confirms: 3 failed, 63 passed (all in test_streaming)
+   ```
+   **Reset between takes** (own git repo, so this is one command):
+   ```bash
+   cd ~/work/demo && git checkout . && \
+     sed -i '' 's/_RAW_LIMIT = 3500/_RAW_LIMIT = 35/' claudebot/telegram/streaming.py
    ```
 2. **Bot settings for speed** (in the chat, before recording):
    `/cd ~/work/demo` · `/model sonnet` · `/effort low` — fast first token,
@@ -41,7 +46,7 @@ and you can re-shoot takes by re-planting.
 
 | Time | Screen | Action / exact line | Overlay caption |
 |---|---|---|---|
-| 0–4s | Terminal | Run `pytest -q` → red: `4 failed, 62 passed` | "the build is broken — and I'm not at my desk" |
+| 0–4s | Terminal | Run `pytest -q` → red: `3 failed, 63 passed` | "the build is broken — and I'm not at my desk" |
 | 4–8s | Phone | Type and send: **`tests are failing — find the bug, fix it, run the suite`** → the 👀 reaction lands on your message | "texting my dev machine" |
 | 8–20s | Phone (speed-ramp 2–3× through the middle) | Reply streams in: Claude names the file, the 🛑 Stop button visible under the streaming bubble | "the real Claude Code, on my machine, on my subscription" |
 | 20–25s | Phone | Final bubble: fixed line + `66 passed` | — |

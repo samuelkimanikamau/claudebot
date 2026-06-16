@@ -1,7 +1,11 @@
 # Distribution checklist
 
-Sequence: README GIF → awesome-list PRs + soft Reddit post → fix reported
-friction → engineering post → Show HN → (optional) Product Hunt.
+Sequence: README visual (og card is fine; screenshots better; GIF optional) →
+awesome-list PRs + soft Reddit post → fix reported friction → engineering post
+→ Show HN → (optional) Product Hunt.
+
+The demo video is an amplifier, not a gate — none of the steps below depend on
+it. Reddit/X posts read fine with screenshots; Show HN leads with the repo.
 
 ## Awesome-list PRs (20 min each, permanent traffic)
 

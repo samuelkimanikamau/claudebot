@@ -59,7 +59,9 @@ sitting.
 
 ## Prep checklist (before submitting)
 
-- [ ] Record the 30s demo GIF and put it at the top of the README (replaces og.png).
+- [ ] Visual at the top of the README. The og.png card is launch-fine; better
+      if you can add 2–3 real Telegram screenshots (5 min, no editing). A demo
+      GIF is pure upside, not a blocker — ship without it if it's fighting you.
 - [ ] Make sure `claudebot doctor` and the installer work on a clean macOS + a
       clean Ubuntu box (the first comment that says "install failed" sets the tone).
 - [ ] Publish the engineering post (engineering-post.md) a few days earlier;

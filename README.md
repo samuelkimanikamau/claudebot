@@ -10,8 +10,8 @@
 **[claudebot.ve.ke](https://claudebot.ve.ke)** · [Install](#install) · [Commands](#talking-to-the-bot) · [Is this allowed?](#is-this-allowed) · [How it works](#how-it-works)
 
 ![Run Claude Code from your phone — the real claude binary, on your machine, over Telegram](https://claudebot.ve.ke/og.png)
-<!-- TODO before HN launch: replace og.png with a ~30s demo GIF — phone on the
-     left, terminal/git log on the right; send a task, watch it stream, tap Stop. -->
+<!-- Optional later polish: swap in 2–3 real Telegram screenshots, or a ~30s
+     demo GIF (phone left, terminal right). The card above is launch-fine as-is. -->
 
 `claudebot` is a thin, self-hosted Telegram front-end for the genuine `claude`
 binary. It talks to Claude Code over its headless `stream-json` protocol on your
