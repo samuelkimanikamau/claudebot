@@ -51,8 +51,10 @@ using your subscription **OAuth token** in any inference client that is *not*
 Claude Code (the Agent SDK with sub creds, Cline, Cursor, raw API, gateways).
 claudebot only pipes text into the genuine `claude` process and reads JSON back —
 the token never leaves Claude Code. Anthropic supports this path explicitly
-(`claude -p` on subscription is documented; `claude setup-token`; a dedicated
-`claude -p` subscription credit from 2026-06-15). **The lines not to cross:**
+(`claude -p` on subscription is documented; `claude setup-token`; and as of
+mid-2026 `claude -p` / third-party-app usage still draws on the normal
+subscription — a move to a separate monthly credit was announced then deferred,
+with advance notice promised before any change). **The lines not to cross:**
 don't extract the token to call the API yourself, keep it single-user, don't
 hammer it 24/7. See README → "Is this allowed?".
 

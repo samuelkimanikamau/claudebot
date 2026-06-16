@@ -120,8 +120,11 @@ raw API calls, an LLM gateway). `claudebot` never touches the token — it only
 pipes text into the genuine `claude` process and reads JSON back, so the token
 stays inside Claude Code, exactly as designed. Anthropic actively supports this
 path: `claude -p`/`--output-format stream-json` on a subscription is documented,
-`claude setup-token` mints a subscription token for scripts, and (from 2026-06-15)
-`claude -p` usage draws on a dedicated subscription Agent-SDK credit.
+`claude setup-token` mints a subscription token for scripts, and — as of mid-2026
+— `claude -p` and third-party-app usage continues to draw on your normal Claude
+subscription (Anthropic announced moving this to a separate monthly credit, then
+deferred that change; they've said they'll give advance notice before any change
+takes effect).
 
 **Stay on the right side of it:**
 - **Single user.** Gate the bot to *your own* Telegram ID (the setup wizard does
