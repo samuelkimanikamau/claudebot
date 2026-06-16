@@ -15,10 +15,15 @@ Suggested entry line (adapt per list's format):
 > Telegram bridge to the real `claude` binary over stream-json. Your
 > subscription, your machine, no API key. Single-user by design.
 
+**Check the mechanism per list first** — not all take PRs. Several of these are
+automation-driven and want an *issue form*, not a hand-edited PR (a raw CSV/README
+PR gets closed there). Confirm before forking.
+
 Targets, in priority order:
 
-1. **hesreallyhim/awesome-claude-code** — the canonical list (check the
-   "applications" / "orchestrators" sections; it has a CONTRIBUTING flow).
+1. **hesreallyhim/awesome-claude-code** — the canonical list. ✅ SUBMITTED via its
+   `recommend-resource` **issue form** (NOT a PR): issue #2043, category
+   "Alternative Clients". Pending maintainer triage → validate → auto-PR.
 2. **jqueryscript/awesome-claude-code** — tools & integrations format.
 3. **jmanhype/awesome-claude-code** — plugins/integrations/resources.
 4. **rohitg00/awesome-claude-code-toolkit** — has "companion apps" and

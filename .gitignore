@@ -26,3 +26,6 @@ logs/
 /fleet/
 /docs/architecture.md
 /docs/MIGRATION.md
+
+# Local Claude Code harness config (preview launch.json, local settings)
+.claude/
