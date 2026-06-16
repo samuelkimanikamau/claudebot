@@ -29,3 +29,6 @@ logs/
 
 # Local Claude Code harness config (preview launch.json, local settings)
 .claude/
+
+# Internal launch / GTM playbook — keep local, not in the public repo
+docs/launch/
