@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import plistlib
 import subprocess
+import time
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -37,7 +38,15 @@ class LaunchdService(ServiceManager):
         logs = log_dir()
         logs.mkdir(parents=True, exist_ok=True)
         args = "".join(f"        <string>{escape(a)}</string>\n" for a in self.bot_argv())
-        env = {"PATH": self.path_env(), "HOME": str(Path.home()), **self.extra_env()}
+        # CLAUDEBOT_LOG_FILE routes bot logging to a rotating logs/claudebot.log;
+        # the Standard*Path files below never rotate, so they must only catch
+        # what logging can't (startup crashes, stray prints).
+        env = {
+            "PATH": self.path_env(),
+            "HOME": str(Path.home()),
+            "CLAUDEBOT_LOG_FILE": "1",
+            **self.extra_env(),
+        }
         env_items = "".join(
             f"        <key>{escape(k)}</key>\n        <string>{escape(v)}</string>\n"
             for k, v in env.items()
@@ -76,6 +85,7 @@ class LaunchdService(ServiceManager):
         log.info("wrote %s", self.plist_path)
         # Replace any prior instance, then load + start.
         self._launchctl("bootout", self._service_target, check=False)
+        self._wait_booted_out()
         self._launchctl("bootstrap", self._domain_target, str(self.plist_path))
         self._launchctl("enable", self._service_target, check=False)
         self._launchctl("kickstart", "-k", self._service_target, check=False)
@@ -118,18 +128,35 @@ class LaunchdService(ServiceManager):
             return None
 
     def logs(self, follow: bool = False) -> None:
+        main = log_dir() / "claudebot.log"
         err = log_dir() / "claudebot.err.log"
         out = log_dir() / "claudebot.out.log"
-        for f in (out, err):
+        for f in (main, out, err):
             f.parent.mkdir(parents=True, exist_ok=True)
             f.touch(exist_ok=True)
         cmd = ["tail", "-n", "200"]
         if follow:
             cmd.append("-f")
-        cmd += [str(out), str(err)]
+        cmd += [str(main), str(out), str(err)]
         subprocess.run(cmd)
 
     # --- helpers ------------------------------------------------------------
+
+    def _wait_booted_out(self, timeout: float = 10.0) -> None:
+        # bootout is asynchronous; bootstrapping while the old job is still
+        # winding down fails with exit status 5 (EIO) and leaves the bot down.
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            loaded = (
+                subprocess.run(
+                    ["launchctl", "print", self._service_target],
+                    capture_output=True,
+                ).returncode
+                == 0
+            )
+            if not loaded:
+                return
+            time.sleep(0.5)
 
     def _launchctl(self, *args: str, check: bool = True) -> None:
         subprocess.run(["launchctl", *args], check=check)

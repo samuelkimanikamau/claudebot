@@ -5,7 +5,7 @@ Everything lives under ``~/.claudebot`` (override with ``CLAUDEBOT_STATE_DIR``):
     ~/.claudebot/
         .env            # config written by the setup wizard (chmod 600)
         sessions.json   # chat_id -> claude session_id map, for --resume
-        logs/           # reserved for file logging
+        logs/           # rotating claudebot.log (launchd service) + out/err crash nets
 """
 
 from __future__ import annotations

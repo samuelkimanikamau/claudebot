@@ -44,6 +44,8 @@ Restart=always
 RestartSec=5
 TimeoutStopSec=10
 KillMode=control-group
+# journald rotates for us — the launchd backend needs CLAUDEBOT_LOG_FILE
+# for the same bounded-logs guarantee; here it would just double-write.
 StandardOutput=journal
 StandardError=journal
 
