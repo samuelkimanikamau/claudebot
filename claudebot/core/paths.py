@@ -52,6 +52,16 @@ def state_dir() -> Path:
     return Path.home() / ".claudebot"
 
 
+def instance_label() -> str:
+    """This bot's short name, for anything user-facing that must identify it.
+
+    ``vetims`` for ``~/.claudebot/instances/vetims``; ``default`` for the un-named
+    bot at ``~/.claudebot``.
+    """
+    name = state_dir().name
+    return "default" if name == ".claudebot" else name
+
+
 def env_file() -> Path:
     return state_dir() / ".env"
 

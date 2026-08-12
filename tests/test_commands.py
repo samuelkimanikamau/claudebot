@@ -104,3 +104,49 @@ def test_apply_thinking_toggles_without_restart():
     assert restart is False
     assert settings.show_thinking is False
     assert "thinking preview off" in message
+
+
+def test_command_menu_exposes_remote_control():
+    names = {name for name, _description in _COMMANDS}
+    assert "remote" in names
+    # Telegram only accepts [a-z0-9_] in command names — a hyphen is rejected.
+    assert all(name.replace("_", "").isalnum() for name in names)
+
+
+def test_apply_remote_off_disables_and_needs_child_restart():
+    settings = _settings()
+    changed, restart, message = _apply_runtime_setting(settings, "remote", ["off"])
+    assert changed and restart
+    assert settings.remote_control is None
+    assert "off" in message.lower()
+
+
+def test_apply_remote_on_restores_auto_name():
+    settings = _settings(remote_control=None)
+    changed, restart, _message = _apply_runtime_setting(settings, "remote", ["on"])
+    assert changed and restart
+    assert settings.remote_control == "auto"
+
+
+def test_apply_remote_accepts_a_session_name():
+    settings = _settings()
+    changed, restart, _message = _apply_runtime_setting(settings, "remote", ["sams-lab"])
+    assert changed and restart
+    assert settings.remote_control == "sams-lab"
+
+
+def test_apply_remote_rejects_a_name_with_spaces():
+    settings = _settings()
+    changed, _restart, message = _apply_runtime_setting(settings, "remote", ["two", "words"])
+    assert not changed
+    assert "cannot contain spaces" in message
+
+
+def test_settings_treat_off_spellings_as_disabled():
+    for value in ("off", "false", "0", "no", ""):
+        assert _settings(remote_control=value).remote_control is None
+
+
+def test_format_config_reports_remote_control():
+    assert "remote control: auto" in _format_config(_settings())
+    assert "remote control: off" in _format_config(_settings(remote_control=None))

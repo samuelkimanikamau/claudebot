@@ -150,3 +150,35 @@ def test_changed_effort_reaches_spawn_args_on_resume():
     args = s._build_args(resume=True)
     assert "--resume" in args and "abc-123" in args
     assert "--effort" in args and "high" in args
+
+
+def test_build_args_enables_remote_control_by_default():
+    args = ClaudeSession(42, _settings())._build_args(resume=False)
+    assert "--remote-control" in args
+    # The name must be explicit: --remote-control takes an optional value, so a
+    # bare flag would swallow whatever argument follows it.
+    assert args[args.index("--remote-control") + 1].startswith("claudebot-")
+    assert "42" in args[args.index("--remote-control") + 1]
+
+
+def test_build_args_omits_remote_control_when_disabled():
+    args = ClaudeSession(1, _settings(remote_control=None))._build_args(resume=False)
+    assert "--remote-control" not in args
+
+
+def test_remote_control_name_is_stable_across_respawns():
+    session = ClaudeSession(7, _settings())
+    first = session.remote_control_name
+    session.session_id = "a-new-forked-id"  # what --resume does to us
+    assert session.remote_control_name == first
+
+
+def test_explicit_remote_control_name_is_used_verbatim():
+    session = ClaudeSession(1, _settings(remote_control="sams-laptop"))
+    assert session.remote_control_name == "sams-laptop"
+    assert "sams-laptop" in session._build_args(resume=True)
+
+
+def test_remote_control_name_has_no_double_hyphen_for_group_chats():
+    session = ClaudeSession(-100123456, _settings())
+    assert session.remote_control_name == "claudebot-default-100123456"

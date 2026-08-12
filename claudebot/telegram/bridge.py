@@ -58,6 +58,7 @@ _WELCOME = (
     "/thinking <on|off> — live 💭 reasoning preview\n"
     "/timeout <seconds> — turn timeout, 0 disables\n"
     "/idle <seconds> — idle child eviction, 0 disables\n"
+    "/remote <on|off|name> — drive this session from claude.ai\n"
 )
 
 _COMMANDS = [
@@ -72,6 +73,7 @@ _COMMANDS = [
     ("thinking", "Toggle live 💭 thinking preview: on/off"),
     ("timeout", "Set per-turn timeout seconds; 0 disables"),
     ("idle", "Set idle eviction seconds; 0 disables"),
+    ("remote", "Remote Control on/off, or set the session name"),
     ("cd", "Change working directory"),
     ("retry", "Resend your last message"),
     ("stop", "Abort the current reply"),
@@ -79,7 +81,7 @@ _COMMANDS = [
 ]
 
 _EFFORTS = {"low", "medium", "high", "xhigh", "max"}
-_SESSION_RESTART_OPTIONS = {"model", "effort", "mode"}
+_SESSION_RESTART_OPTIONS = {"model", "effort", "mode", "remote"}
 # Runtime command key -> the Settings field it writes (used to persist per-chat).
 _FIELD_FOR = {
     "model": "model",
@@ -89,6 +91,7 @@ _FIELD_FOR = {
     "thinking": "show_thinking",
     "timeout": "turn_timeout",
     "idle": "idle_timeout",
+    "remote": "remote_control",
 }
 _CLEAR_VALUES = {"default", "auto", "none", "off"}
 _TRUE_VALUES = {"1", "true", "yes", "y", "on", "enable", "enabled"}
@@ -104,6 +107,7 @@ _KEYBOARD_OPTIONS: dict[str, tuple[str, ...]] = {
     "model": ("default", "opus", "sonnet", "haiku"),
     "effort": ("default", "low", "medium", "high", "xhigh", "max"),
     "mode": PERMISSION_MODES,
+    "remote": ("on", "off"),
 }
 
 
@@ -130,6 +134,7 @@ def _format_config(settings: Settings) -> str:
         f"• markdown: {'on' if settings.markdown else 'off'}\n"
         f"• show cost: {'on' if settings.show_cost else 'off'}\n"
         f"• thinking preview: {'on' if settings.show_thinking else 'off'}\n"
+        f"• remote control: {settings.remote_control or 'off'}\n"
         f"• idle timeout: {settings.idle_timeout}s\n"
         f"• turn timeout: {settings.turn_timeout}s"
     )
@@ -208,6 +213,18 @@ def _apply_runtime_setting(
         settings.idle_timeout = seconds
         return True, False, f"✅ idle timeout set to {seconds}s."
 
+    if key == "remote":
+        if normalized in _FALSE_VALUES:
+            settings.remote_control = None
+            return True, True, "✅ Remote Control off."
+        if normalized in _TRUE_VALUES or normalized in _CLEAR_VALUES:
+            settings.remote_control = "auto"
+            return True, True, "✅ Remote Control on, named after this chat."
+        if any(ch.isspace() for ch in value):
+            return False, False, "A Remote Control name cannot contain spaces."
+        settings.remote_control = value
+        return True, True, f"✅ Remote Control on, as “{value}”."
+
     return False, False, f"Unknown setting: {key}"
 
 
@@ -220,6 +237,7 @@ def _usage_for(key: str, settings: Settings) -> str:
         "thinking": "on" if settings.show_thinking else "off",
         "timeout": f"{settings.turn_timeout}s",
         "idle": f"{settings.idle_timeout}s",
+        "remote": settings.remote_control or "off",
     }.get(key, "unknown")
     examples = {
         "model": "Usage: /model <default|opus|sonnet|haiku|model-id>",
@@ -229,6 +247,7 @@ def _usage_for(key: str, settings: Settings) -> str:
         "thinking": "Usage: /thinking <on|off>",
         "timeout": "Usage: /timeout <seconds>  (0 disables)",
         "idle": "Usage: /idle <seconds>  (0 disables)",
+        "remote": "Usage: /remote <on|off|session-name>",
     }.get(key, f"Usage: /{key} <value>")
     return f"Current {key}: {current}\n{examples}"
 

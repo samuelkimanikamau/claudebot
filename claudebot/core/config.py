@@ -69,6 +69,13 @@ class Settings(BaseSettings):
     )
     allowed_tools: Annotated[list[str], NoDecode] = Field(default_factory=list)
     disallowed_tools: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    remote_control: str | None = Field(
+        default="auto",
+        description="Claude Code Remote Control for each spawned child. 'auto' names "
+        "the session after the instance and chat; any other value is used verbatim as "
+        "the name; None/'off' disables it. One field rather than an on/off pair so the "
+        "per-chat override persists through the same path as /model and /effort.",
+    )
 
     # --- Behaviour ----------------------------------------------------------
     stream_partials: bool = Field(
@@ -126,6 +133,17 @@ class Settings(BaseSettings):
                 f"permission_mode must be one of {PERMISSION_MODES}, got {v!r}"
             )
         return v
+
+    @field_validator("remote_control", mode="before")
+    @classmethod
+    def _normalize_remote_control(cls, v: object) -> object:
+        """Treat the usual "off" spellings as disabled so a .env can turn it off."""
+        if v is None:
+            return None
+        text = str(v).strip()
+        if not text or text.lower() in {"off", "false", "0", "no", "none", "disabled"}:
+            return None
+        return text
 
     @field_validator("working_dir", "system_prompt_file", mode="before")
     @classmethod

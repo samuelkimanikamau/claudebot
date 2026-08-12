@@ -33,6 +33,7 @@ from claudebot.claude import events
 from claudebot.claude.events import ClaudeEvent
 from claudebot.core.config import Settings
 from claudebot.core.logging import get_logger
+from claudebot.core.paths import instance_label
 
 log = get_logger("claudebot.claude")
 
@@ -312,11 +313,30 @@ class ClaudeSession:
             args += ["--append-system-prompt", "\n\n".join(prompt_parts)]
         if s.system_prompt_file:
             args += ["--append-system-prompt-file", str(s.system_prompt_file)]
+        if s.remote_control:
+            # Always pass an explicit name: --remote-control takes an OPTIONAL value,
+            # so a bare flag followed by another argument is asking to have that
+            # argument swallowed as the name.
+            args += ["--remote-control", self.remote_control_name]
         if s.allowed_tools:
             args += ["--allowedTools", *s.allowed_tools]
         if s.disallowed_tools:
             args += ["--disallowedTools", *s.disallowed_tools]
         return args
+
+    @property
+    def remote_control_name(self) -> str:
+        """The Remote Control session name this chat's child registers under.
+
+        Stable across respawns so the session keeps one identity on claude.ai
+        through idle eviction, crashes and /model restarts.
+        """
+        configured = self.settings.remote_control
+        if configured and configured != "auto":
+            return configured
+        # Group chat ids are negative; lstrip keeps the name from reading as
+        # "claudebot-vetims--100123".
+        return f"claudebot-{instance_label()}-{str(self.chat_id).lstrip('-')}"
 
     def _child_env(self) -> dict[str, str]:
         env = dict(os.environ)
