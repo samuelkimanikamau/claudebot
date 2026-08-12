@@ -76,20 +76,35 @@ def _balance_fences(chunks: list[str]) -> list[str]:
     return balanced
 
 
+def _thinking_tail(text: str, limit: int = 160) -> str:
+    """The last ~limit chars of the thinking, compacted to one line."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    tail = text[-limit:]
+    cut = tail.find(" ")
+    if 0 <= cut < limit // 2:  # start at a word boundary when one is near
+        tail = tail[cut + 1 :]
+    return "…" + tail
+
+
 class Streamer:
     def __init__(self, bot, chat_id: int, settings: Settings, *, live_markup=None) -> None:
         self.bot = bot
         self.chat_id = chat_id
         self.edit_interval = settings.edit_interval
         self.stream_partials = settings.stream_partials
+        self.show_thinking = settings.show_thinking
         self.markdown = settings.markdown
         # Inline keyboard (e.g. a Stop button) shown on the FIRST streamed block
         # while the turn is live; cleared again on finalize()/error().
         self._live_markup = live_markup
         self._buffer = ""
-        # Live tool-activity line ("🔧 Bash…") shown while Claude runs tools —
-        # the long silent phase of a turn. Cleared as soon as new text streams.
+        # Live activity line: "💭 …" while Claude reasons, "🔧 Bash…" while it
+        # runs tools — the otherwise-silent phases of a turn. Cleared as soon
+        # as new reply text streams.
         self._status = ""
+        self._thinking = ""  # current thinking block, for the 💭 tail
         # One Telegram message per streamed block; _block_last[i] is the plain text
         # last shown in block i (to skip 'not modified' edits).
         self._block_ids: list[int] = []
@@ -108,12 +123,20 @@ class Streamer:
             if delta:
                 self._buffer += delta
                 self._status = ""
+                self._thinking = ""
                 self._schedule_preview()
+            elif self.show_thinking:
+                think = events.partial_thinking(event)
+                if think:
+                    self._thinking += think
+                    self._status = "💭 " + _thinking_tail(self._thinking)
+                    self._schedule_preview()
         elif not self.stream_partials and events.is_assistant(event):
             txt = events.assistant_text(event)
             if txt:
                 self._buffer += txt
                 self._status = ""
+                self._thinking = ""
                 self._schedule_preview()  # background worker respects edit_interval
         if events.is_assistant(event):
             # A tool_use message means a tool phase is starting — often the
@@ -121,6 +144,7 @@ class Streamer:
             names = list(dict.fromkeys(events.assistant_tool_names(event)))
             if names:
                 self._status = "🔧 " + ", ".join(names)[:200] + "…"
+                self._thinking = ""  # a new thinking block may follow the tools
                 self._schedule_preview()
 
     def _schedule_preview(self) -> None:

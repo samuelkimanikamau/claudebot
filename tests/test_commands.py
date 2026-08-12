@@ -95,3 +95,12 @@ def test_options_keyboard_none_for_freeform_keys():
 
 def test_stop_markup_callback_data():
     assert _STOP_MARKUP.inline_keyboard[0][0].callback_data == _STOP_CALLBACK
+
+
+def test_apply_thinking_toggles_without_restart():
+    settings = _settings(show_thinking=True)
+    changed, restart, message = _apply_runtime_setting(settings, "thinking", ["off"])
+    assert changed is True
+    assert restart is False
+    assert settings.show_thinking is False
+    assert "thinking preview off" in message

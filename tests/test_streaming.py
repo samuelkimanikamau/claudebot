@@ -255,3 +255,49 @@ async def test_finalize_upgrades_existing_blocks_concurrently():
     await streamer.finalize(streamer._buffer + " done")
     # The in-place upgrades overlap instead of paying one round-trip per block.
     assert bot.max_inflight >= 2
+
+
+def _thinking(text: str):
+    return parse_line(
+        json.dumps(
+            {
+                "type": "stream_event",
+                "event": {
+                    "type": "content_block_delta",
+                    "delta": {"type": "thinking_delta", "thinking": text},
+                },
+            }
+        )
+    )
+
+
+async def test_thinking_streams_as_status_and_clears_on_text():
+    bot = RecordBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
+    await streamer.on_event(_thinking("The user wants X, so I should check Y"))
+    await asyncio.sleep(0.05)
+    assert any(
+        text.startswith("💭 ") and text.endswith("check Y") for text, _m, _mid in bot.sent
+    )
+    # Reply text starting clears the status; the bubble becomes the text alone.
+    await streamer.on_event(_partial("Answer:"))
+    await asyncio.sleep(0.05)
+    assert streamer._status == ""
+    assert streamer._thinking == ""
+
+
+async def test_thinking_preview_can_be_disabled():
+    bot = RecordBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False, show_thinking=False))
+    await streamer.on_event(_thinking("private reasoning"))
+    await asyncio.sleep(0.05)
+    assert bot.sent == []
+
+
+def test_thinking_tail_compacts_and_truncates():
+    from claudebot.telegram.streaming import _thinking_tail
+
+    assert _thinking_tail("a\nb   c") == "a b c"
+    tail = _thinking_tail("word " * 100)
+    assert tail.startswith("…")
+    assert len(tail) <= 161

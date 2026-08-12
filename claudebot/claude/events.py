@@ -109,6 +109,21 @@ def partial_text(e: ClaudeEvent) -> str | None:
     return None
 
 
+def partial_thinking(e: ClaudeEvent) -> str | None:
+    """Incremental extended-thinking delta from a ``stream_event``::
+
+        {"type":"stream_event","event":{"type":"content_block_delta",
+          "delta":{"type":"thinking_delta","thinking":"..."}}}
+    """
+    ev = e.raw.get("event")
+    if not isinstance(ev, dict) or ev.get("type") != "content_block_delta":
+        return None
+    delta = ev.get("delta")
+    if isinstance(delta, dict) and delta.get("type") == "thinking_delta":
+        return str(delta.get("thinking", ""))
+    return None
+
+
 def result_text(e: ClaudeEvent) -> str:
     r = e.raw.get("result")
     return r if isinstance(r, str) else ""

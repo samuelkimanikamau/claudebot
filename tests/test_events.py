@@ -101,3 +101,18 @@ def test_chunk_text_no_fence_untouched():
     text = ("a" * 900 + "\n") * 3
     chunks = chunk_text(text, limit=1000)
     assert "```" not in "".join(chunks)
+
+
+def test_partial_thinking_extracts_thinking_delta():
+    e = parse_line(
+        '{"type":"stream_event","event":{"type":"content_block_delta",'
+        '"delta":{"type":"thinking_delta","thinking":"hmm, let me"}}}'
+    )
+    assert events.partial_thinking(e) == "hmm, let me"
+    # A text delta is NOT thinking (and vice versa in partial_text).
+    t = parse_line(
+        '{"type":"stream_event","event":{"type":"content_block_delta",'
+        '"delta":{"type":"text_delta","text":"answer"}}}'
+    )
+    assert events.partial_thinking(t) is None
+    assert events.partial_text(e) is None

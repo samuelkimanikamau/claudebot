@@ -90,6 +90,7 @@ Just message it. Slash commands:
 | `/mode <bypassPermissions\|acceptEdits\|default\|plan\|dontAsk>` | Set permission mode and start a fresh session |
 | `/tools` | Show allowed/disallowed Claude tools |
 | `/cost <on\|off>` | Toggle cost footer after replies |
+| `/thinking <on\|off>` | Live 💭 preview of Claude's reasoning while it thinks |
 | `/timeout <seconds>` | Set per-turn timeout (`0` disables) |
 | `/idle <seconds>` | Set idle child eviction timeout (`0` disables) |
 | `/cd <path>` | Switch the working directory (persists; starts a fresh session there) |

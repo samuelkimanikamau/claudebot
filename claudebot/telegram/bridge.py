@@ -55,6 +55,7 @@ _WELCOME = (
     "/config — show current runtime config\n"
     "/tools — show tool allow/deny lists\n"
     "/cost <on|off> — show/hide cost footer\n"
+    "/thinking <on|off> — live 💭 reasoning preview\n"
     "/timeout <seconds> — turn timeout, 0 disables\n"
     "/idle <seconds> — idle child eviction, 0 disables\n"
 )
@@ -68,6 +69,7 @@ _COMMANDS = [
     ("mode", "Set permission mode for new turns"),
     ("tools", "Show allowed/disallowed Claude tools"),
     ("cost", "Toggle cost footer: on/off"),
+    ("thinking", "Toggle live 💭 thinking preview: on/off"),
     ("timeout", "Set per-turn timeout seconds; 0 disables"),
     ("idle", "Set idle eviction seconds; 0 disables"),
     ("cd", "Change working directory"),
@@ -84,6 +86,7 @@ _FIELD_FOR = {
     "effort": "effort",
     "mode": "permission_mode",
     "cost": "show_cost",
+    "thinking": "show_thinking",
     "timeout": "turn_timeout",
     "idle": "idle_timeout",
 }
@@ -126,6 +129,7 @@ def _format_config(settings: Settings) -> str:
         f"• stream partials: {'on' if settings.stream_partials else 'off'}\n"
         f"• markdown: {'on' if settings.markdown else 'off'}\n"
         f"• show cost: {'on' if settings.show_cost else 'off'}\n"
+        f"• thinking preview: {'on' if settings.show_thinking else 'off'}\n"
         f"• idle timeout: {settings.idle_timeout}s\n"
         f"• turn timeout: {settings.turn_timeout}s"
     )
@@ -183,6 +187,13 @@ def _apply_runtime_setting(
         settings.show_cost = flag
         return True, False, f"✅ cost footer {'on' if flag else 'off'}."
 
+    if key == "thinking":
+        flag = _parse_bool(normalized)
+        if flag is None:
+            return False, False, "Usage: /thinking <on|off>"
+        settings.show_thinking = flag
+        return True, False, f"✅ live thinking preview {'on' if flag else 'off'}."
+
     if key == "timeout":
         seconds = _parse_seconds(value)
         if seconds is None:
@@ -206,6 +217,7 @@ def _usage_for(key: str, settings: Settings) -> str:
         "effort": settings.effort or "default",
         "mode": settings.permission_mode,
         "cost": "on" if settings.show_cost else "off",
+        "thinking": "on" if settings.show_thinking else "off",
         "timeout": f"{settings.turn_timeout}s",
         "idle": f"{settings.idle_timeout}s",
     }.get(key, "unknown")
@@ -214,6 +226,7 @@ def _usage_for(key: str, settings: Settings) -> str:
         "effort": "Usage: /effort <default|low|medium|high|xhigh|max>",
         "mode": f"Usage: /mode <{'|'.join(PERMISSION_MODES)}>",
         "cost": "Usage: /cost <on|off>",
+        "thinking": "Usage: /thinking <on|off>",
         "timeout": "Usage: /timeout <seconds>  (0 disables)",
         "idle": "Usage: /idle <seconds>  (0 disables)",
     }.get(key, f"Usage: /{key} <value>")

@@ -100,6 +100,11 @@ class Settings(BaseSettings):
     show_cost: bool = Field(
         default=False, description="Append a token/cost footer after each reply."
     )
+    show_thinking: bool = Field(
+        default=True,
+        description="Stream a live 💭 line with the tail of Claude's current "
+        "thinking while it reasons (needs stream_partials).",
+    )
     log_level: str = Field(default="INFO")
 
     # --- validators ---------------------------------------------------------
