@@ -87,6 +87,9 @@ class Streamer:
         # while the turn is live; cleared again on finalize()/error().
         self._live_markup = live_markup
         self._buffer = ""
+        # Live tool-activity line ("🔧 Bash…") shown while Claude runs tools —
+        # the long silent phase of a turn. Cleared as soon as new text streams.
+        self._status = ""
         # One Telegram message per streamed block; _block_last[i] is the plain text
         # last shown in block i (to skip 'not modified' edits).
         self._block_ids: list[int] = []
@@ -104,12 +107,21 @@ class Streamer:
             delta = events.partial_text(event)
             if delta:
                 self._buffer += delta
+                self._status = ""
                 self._schedule_preview()
         elif not self.stream_partials and events.is_assistant(event):
             txt = events.assistant_text(event)
             if txt:
                 self._buffer += txt
+                self._status = ""
                 self._schedule_preview()  # background worker respects edit_interval
+        if events.is_assistant(event):
+            # A tool_use message means a tool phase is starting — often the
+            # longest, otherwise-silent part of a turn. Surface it.
+            names = list(dict.fromkeys(events.assistant_tool_names(event)))
+            if names:
+                self._status = "🔧 " + ", ".join(names)[:200] + "…"
+                self._schedule_preview()
 
     def _schedule_preview(self) -> None:
         """Kick a background preview edit without blocking Claude stdout reads."""
@@ -137,10 +149,18 @@ class Streamer:
                 self._preview_task = None
 
     def _preview_blocks(self) -> list[str]:
-        """Split the buffer into blocks using the SAME boundary finalize() uses."""
-        if not self._buffer.strip():
-            return []
-        return chunk_text(self._buffer, _RAW_LIMIT)
+        """Split the buffer into blocks using the SAME boundary finalize() uses.
+
+        The tool-status line rides on the tail block (or stands alone before any
+        text has streamed); it stays within the 4096 hard limit because blocks
+        are cut at 3500 and the status is capped short."""
+        blocks = chunk_text(self._buffer, _RAW_LIMIT) if self._buffer.strip() else []
+        if self._status:
+            if blocks:
+                blocks[-1] = f"{blocks[-1]}\n\n{self._status}"
+            else:
+                blocks = [self._status]
+        return blocks
 
     async def _preview_now(self) -> None:
         # A worker that slipped past the loop guard must not edit after finalize().
@@ -149,11 +169,15 @@ class Streamer:
         blocks = self._preview_blocks()
         if not blocks:
             return
-        try:
-            for i, blk in enumerate(blocks):
-                # Stop button rides on block 0 only (omit the kwarg entirely when
-                # unused so test fakes with narrow signatures keep working).
-                kw = {"reply_markup": self._live_markup} if i == 0 and self._live_markup else {}
+        # Stamp BEFORE the network calls: the throttle then paces pass *starts*
+        # (a true edit_interval cadence instead of interval + round-trips), and
+        # a persistently failing edit below can't hot-loop the worker.
+        self._last_edit = time.monotonic()
+        for i, blk in enumerate(blocks):
+            # Stop button rides on block 0 only (omit the kwarg entirely when
+            # unused so test fakes with narrow signatures keep working).
+            kw = {"reply_markup": self._live_markup} if i == 0 and self._live_markup else {}
+            try:
                 if i < len(self._block_ids):
                     if self._block_last[i] == blk:
                         continue  # unchanged -> skip ('message is not modified')
@@ -165,13 +189,20 @@ class Streamer:
                     msg = await self.bot.send_message(self.chat_id, blk, **kw)
                     self._block_ids.append(msg.message_id)
                     self._block_last.append(blk)
-            self._last_edit = time.monotonic()
-        except RetryAfter as exc:
-            await asyncio.sleep(exc.retry_after + 0.5)
-        except BadRequest:
-            pass
-        except TelegramError as exc:
-            log.debug("preview error: %s", exc)
+            except RetryAfter as exc:
+                await asyncio.sleep(exc.retry_after + 0.5)
+                return  # finish this content on the next pass
+            except BadRequest:
+                if i < len(self._block_last):
+                    # 'message is not modified', or the user deleted this bubble
+                    # ('message to edit not found') — record the content as shown
+                    # so the worker doesn't re-attempt the same edit every pass.
+                    self._block_last[i] = blk
+                else:
+                    return  # a failed SEND has no bubble; don't send later blocks out of order
+            except TelegramError as exc:
+                log.debug("preview error: %s", exc)
+                return  # transient network trouble — retry on the next pass
 
     async def _cancel_preview(self) -> None:
         task, self._preview_task = self._preview_task, None

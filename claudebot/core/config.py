@@ -80,7 +80,7 @@ class Settings(BaseSettings):
         "tables→monospace). Falls back to plain text if a message won't parse.",
     )
     edit_interval: float = Field(
-        default=1.3, description="Minimum seconds between streaming message edits."
+        default=1.0, description="Minimum seconds between streaming preview passes."
     )
     idle_timeout: int = Field(
         default=3600,

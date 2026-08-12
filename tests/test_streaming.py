@@ -1,6 +1,8 @@
 import asyncio
 import json
 
+from telegram.error import BadRequest
+
 from claudebot.claude.events import parse_line
 from claudebot.core.config import Settings
 from claudebot.telegram.streaming import Streamer
@@ -167,3 +169,65 @@ async def test_finalize_deletes_leftover_blocks_when_reply_shrinks():
     # Internal block state is trimmed to match the bubbles that remain.
     assert streamer._block_ids == [leftover_id - 1]
     assert len(streamer._block_last) == 1
+
+
+def _assistant_tools(*names: str):
+    return parse_line(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "tool_use", "id": f"t{i}", "name": n, "input": {}}
+                        for i, n in enumerate(names)
+                    ],
+                },
+            }
+        )
+    )
+
+
+async def test_tool_status_streams_before_any_text_and_clears_on_text():
+    bot = RecordBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
+    await streamer.on_event(_assistant_tools("Bash", "Read", "Bash"))
+    await asyncio.sleep(0.05)  # let the background preview worker run
+    # The status stands alone (deduped names) — activity is visible during tools.
+    assert any(text == "🔧 Bash, Read…" for text, _m, _mid in bot.sent)
+    # New text clears the status; the same bubble is edited to the text alone.
+    await streamer.on_event(_partial("hello"))
+    await asyncio.sleep(0.05)
+    assert streamer._status == ""
+    assert any(text == "hello" for text, _m, _mid in bot.edited)
+
+
+async def test_tool_status_rides_on_the_tail_block_after_text():
+    bot = RecordBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
+    streamer._buffer = "some streamed text"
+    streamer._status = "🔧 Bash…"
+    assert streamer._preview_blocks() == ["some streamed text\n\n🔧 Bash…"]
+
+
+async def test_failed_edit_is_recorded_not_hot_retried():
+    class DeletedBubbleBot(RecordBot):
+        def __init__(self) -> None:
+            super().__init__()
+            self.edit_attempts = 0
+
+        async def edit_message_text(self, text, chat_id, message_id, parse_mode=None, reply_markup=None):
+            self.edit_attempts += 1
+            raise BadRequest("message to edit not found")
+
+    bot = DeletedBubbleBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
+    streamer._buffer = "one"
+    await streamer._preview_now()  # first pass sends the bubble
+    streamer._buffer = "one two"
+    await streamer._preview_now()  # edit fails -> content recorded as shown
+    assert bot.edit_attempts == 1
+    assert streamer._block_last[0] == "one two"
+    assert streamer._last_edit > 0  # throttle clock stamped despite the failure
+    await streamer._preview_now()  # unchanged -> the failing edit is NOT retried
+    assert bot.edit_attempts == 1
