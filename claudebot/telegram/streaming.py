@@ -30,6 +30,12 @@ log = get_logger("claudebot.telegram.stream")
 _HARD_LIMIT = 4096          # Telegram's max message length
 _RAW_LIMIT = 3500           # block/chunk boundary; leaves room for MarkdownV2 escaping
 
+# The tool-status "spinner": message edits are the only animation Telegram
+# allows, so the preview worker keeps ticking while tools run, advancing one
+# clock frame per _SPIN_TICK seconds alongside an elapsed counter.
+_SPINNER = "🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚🕛"
+_SPIN_TICK = 1.0  # seconds per frame; also the minimum cadence while spinning
+
 
 def chunk_text(text: str, limit: int = _RAW_LIMIT) -> list[str]:
     """Split text into <=limit pieces, preferring newline boundaries.
@@ -100,10 +106,12 @@ class Streamer:
         # while the turn is live; cleared again on finalize()/error().
         self._live_markup = live_markup
         self._buffer = ""
-        # Live activity line: "💭 …" while Claude reasons, "🔧 Bash…" while it
-        # runs tools — the otherwise-silent phases of a turn. Cleared as soon
-        # as new reply text streams.
+        # Live activity line: "💭 …" while Claude reasons, "🔧 Bash 🕑 14s"
+        # while it runs tools — the otherwise-silent phases of a turn. Cleared
+        # as soon as new reply text streams. _status_started marks an ANIMATED
+        # status: the worker keeps ticking to spin the clock + elapsed counter.
         self._status = ""
+        self._status_started: float | None = None
         self._thinking = ""  # current thinking block, for the 💭 tail
         # One Telegram message per streamed block; _block_last[i] is the plain text
         # last shown in block i (to skip 'not modified' edits).
@@ -112,6 +120,9 @@ class Streamer:
         self._last_edit = 0.0
         self._finalized = False
         self._preview_task: asyncio.Task | None = None
+        # Set by _schedule_preview to interrupt the worker's sleep early when
+        # stream state changes (e.g. spinner cadence -> text cadence).
+        self._wake = asyncio.Event()
 
     # --- live streaming (plain text, head-anchored blocks) ------------------
 
@@ -122,35 +133,52 @@ class Streamer:
             delta = events.partial_text(event)
             if delta:
                 self._buffer += delta
-                self._status = ""
-                self._thinking = ""
+                self._clear_status()
                 self._schedule_preview()
             elif self.show_thinking:
                 think = events.partial_thinking(event)
                 if think:
                     self._thinking += think
+                    # Not animated: the rolling tail is its own animation.
                     self._status = "💭 " + _thinking_tail(self._thinking)
+                    self._status_started = None
                     self._schedule_preview()
         elif not self.stream_partials and events.is_assistant(event):
             txt = events.assistant_text(event)
             if txt:
                 self._buffer += txt
-                self._status = ""
-                self._thinking = ""
+                self._clear_status()
                 self._schedule_preview()  # background worker respects edit_interval
         if events.is_assistant(event):
             # A tool_use message means a tool phase is starting — often the
-            # longest, otherwise-silent part of a turn. Surface it.
+            # longest, otherwise-silent part of a turn. Surface it, animated.
             names = list(dict.fromkeys(events.assistant_tool_names(event)))
             if names:
-                self._status = "🔧 " + ", ".join(names)[:200] + "…"
+                self._status = "🔧 " + ", ".join(names)[:200]
+                self._status_started = time.monotonic()
                 self._thinking = ""  # a new thinking block may follow the tools
                 self._schedule_preview()
+
+    def _clear_status(self) -> None:
+        self._status = ""
+        self._status_started = None
+        self._thinking = ""
+
+    def _render_status(self) -> str:
+        """The status line as shown NOW — animated ones get a clock + elapsed."""
+        if not self._status or self._status_started is None:
+            return self._status
+        elapsed = time.monotonic() - self._status_started
+        frame = _SPINNER[int(elapsed / _SPIN_TICK) % len(_SPINNER)]
+        secs = int(elapsed)
+        took = f"{secs // 60}m{secs % 60:02d}s" if secs >= 60 else f"{secs}s"
+        return f"{self._status} {frame} {took}"
 
     def _schedule_preview(self) -> None:
         """Kick a background preview edit without blocking Claude stdout reads."""
         if self._finalized:
             return
+        self._wake.set()
         if self._preview_task is None or self._preview_task.done():
             self._preview_task = asyncio.create_task(self._preview_worker())
 
@@ -158,11 +186,28 @@ class Streamer:
         """Throttle live Telegram edits independently of Claude event consumption."""
         try:
             while not self._finalized:
-                delay = self.edit_interval - (time.monotonic() - self._last_edit)
-                if delay > 0:
-                    await asyncio.sleep(delay)
+                # Sleep until the throttle allows the next pass, waking early
+                # if stream state changes (the effective interval may shrink,
+                # e.g. spinner cadence -> text cadence). Re-check on each wake
+                # so the minimum interval is always honoured.
+                while True:
+                    interval = self.edit_interval
+                    if self._status_started is not None:
+                        # Spinner ticks at _SPIN_TICK even if edit_interval is
+                        # lower — an animated status must never hot-spin the API.
+                        interval = max(interval, _SPIN_TICK)
+                    delay = interval - (time.monotonic() - self._last_edit)
+                    if delay <= 0:
+                        break
+                    self._wake.clear()
+                    with contextlib.suppress(asyncio.TimeoutError):
+                        await asyncio.wait_for(self._wake.wait(), timeout=delay)
                 await self._preview_now()
-                if self._finalized or self._preview_blocks() == self._block_last:
+                if self._finalized:
+                    break
+                if self._status_started is not None:
+                    continue  # keep ticking the spinner while tools run
+                if self._preview_blocks() == self._block_last:
                     break
         except asyncio.CancelledError:
             raise
@@ -179,11 +224,12 @@ class Streamer:
         text has streamed); it stays within the 4096 hard limit because blocks
         are cut at 3500 and the status is capped short."""
         blocks = chunk_text(self._buffer, _RAW_LIMIT) if self._buffer.strip() else []
-        if self._status:
+        status = self._render_status()
+        if status:
             if blocks:
-                blocks[-1] = f"{blocks[-1]}\n\n{self._status}"
+                blocks[-1] = f"{blocks[-1]}\n\n{status}"
             else:
-                blocks = [self._status]
+                blocks = [status]
         return blocks
 
     async def _preview_now(self) -> None:

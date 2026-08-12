@@ -193,8 +193,8 @@ async def test_tool_status_streams_before_any_text_and_clears_on_text():
     streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
     await streamer.on_event(_assistant_tools("Bash", "Read", "Bash"))
     await asyncio.sleep(0.05)  # let the background preview worker run
-    # The status stands alone (deduped names) — activity is visible during tools.
-    assert any(text == "🔧 Bash, Read…" for text, _m, _mid in bot.sent)
+    # The status stands alone (deduped names, spinner + elapsed appended).
+    assert any(text.startswith("🔧 Bash, Read ") for text, _m, _mid in bot.sent)
     # New text clears the status; the same bubble is edited to the text alone.
     await streamer.on_event(_partial("hello"))
     await asyncio.sleep(0.05)
@@ -301,3 +301,34 @@ def test_thinking_tail_compacts_and_truncates():
     tail = _thinking_tail("word " * 100)
     assert tail.startswith("…")
     assert len(tail) <= 161
+
+
+def test_render_status_appends_spinner_frame_and_elapsed():
+    import time as _time
+
+    from claudebot.telegram.streaming import _SPINNER
+
+    streamer = Streamer(RecordBot(), 1, _settings(markdown=False))
+    streamer._status = "🔧 Bash"
+    streamer._status_started = _time.monotonic() - 75
+    rendered = streamer._render_status()
+    assert rendered.startswith("🔧 Bash ")
+    assert rendered.endswith(" 1m15s")
+    assert any(frame in rendered for frame in _SPINNER)
+    # Non-animated statuses (💭) render untouched.
+    streamer._status_started = None
+    assert streamer._render_status() == "🔧 Bash"
+
+
+async def test_tool_spinner_keeps_ticking_without_new_events(monkeypatch):
+    from claudebot.telegram import streaming as st
+
+    monkeypatch.setattr(st, "_SPIN_TICK", 0.05)
+    bot = RecordBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0.01, markdown=False))
+    await streamer.on_event(_assistant_tools("Bash"))
+    await asyncio.sleep(0.3)  # no further events — the worker must tick alone
+    await streamer.finalize("done")  # stops the worker
+    updates = [t for t, _m, _mid in bot.sent + bot.edited if t.startswith("🔧 Bash")]
+    assert len(updates) >= 3  # kept editing with no new events
+    assert len(set(updates)) >= 2  # the frame actually advanced
