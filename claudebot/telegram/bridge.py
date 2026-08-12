@@ -142,7 +142,9 @@ def _apply_runtime_setting(
 ) -> tuple[bool, bool, str]:
     """Apply a runtime setting from a Telegram command.
 
-    Returns ``(changed, requires_fresh_session, user_message)``.
+    Returns ``(changed, requires_child_restart, user_message)``. A restart kills
+    the claude child so the new spawn args apply; the conversation itself is
+    preserved because the next turn resumes the same session_id.
     """
     value = " ".join(args).strip()
     if not value:
@@ -404,14 +406,17 @@ class TelegramBridge:
             )
             return
         # Apply to THIS chat's settings only (no cross-chat bleed) and persist it.
-        changed, needs_fresh_session, message = _apply_runtime_setting(session.settings, key, args)
+        changed, needs_restart, message = _apply_runtime_setting(session.settings, key, args)
         if changed:
             field = _FIELD_FOR.get(key)
             if field is not None:
                 self.manager.persist_override(chat_id, field, getattr(session.settings, field))
-            if needs_fresh_session:
-                await self.manager.reset(chat_id)
-                message += "\n🆕 Started a fresh conversation with the new setting."
+            if needs_restart:
+                # model/effort/mode are spawn args, so the child must restart —
+                # but stop() keeps the session_id, and the next message resumes
+                # the SAME conversation with the new flag (like idle eviction).
+                await session.stop()
+                message += "\n♻️ Applied — your conversation continues."
         await update.effective_message.reply_text(message)
 
     async def _cmd_cd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -425,7 +430,7 @@ class TelegramBridge:
             await update.effective_message.reply_text(f"❌ Not a directory: {path}")
             return
         # Persist as a per-chat override so the directory survives restarts and
-        # the fresh sessions started by /model, /effort, /mode.
+        # the child restarts triggered by /model, /effort, /mode.
         self.manager.persist_override(update.effective_chat.id, "working_dir", str(path))
         await self.manager.reset(update.effective_chat.id)
         await update.effective_message.reply_text(f"📁 Working dir set to {path}\nStarted a fresh session there.")

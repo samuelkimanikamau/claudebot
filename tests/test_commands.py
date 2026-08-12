@@ -28,7 +28,7 @@ def test_format_config_includes_runtime_controls():
     assert "show cost: on" in text
 
 
-def test_apply_model_sets_runtime_value_and_needs_fresh_session():
+def test_apply_model_sets_runtime_value_and_needs_child_restart():
     settings = _settings()
     changed, restart, message = _apply_runtime_setting(settings, "model", ["opus"])
     assert changed is True

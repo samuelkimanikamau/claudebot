@@ -139,3 +139,14 @@ async def test_unexpected_child_exit_during_turn_does_not_retry_user_message(mon
     assert "Claude process stopped" in result.text
     assert calls == 1
     assert respawns == 0
+
+
+def test_changed_effort_reaches_spawn_args_on_resume():
+    # /effort mutates the live Settings and stops the child; the next spawn must
+    # --resume the SAME session id with the new --effort (conversation preserved).
+    settings = _settings(effort=None)
+    s = ClaudeSession(1, settings, session_id="abc-123", is_new=False)
+    settings.effort = "high"
+    args = s._build_args(resume=True)
+    assert "--resume" in args and "abc-123" in args
+    assert "--effort" in args and "high" in args
