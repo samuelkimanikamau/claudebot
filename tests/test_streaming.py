@@ -231,3 +231,27 @@ async def test_failed_edit_is_recorded_not_hot_retried():
     assert streamer._last_edit > 0  # throttle clock stamped despite the failure
     await streamer._preview_now()  # unchanged -> the failing edit is NOT retried
     assert bot.edit_attempts == 1
+
+
+async def test_finalize_upgrades_existing_blocks_concurrently():
+    class SlowEditBot(RecordBot):
+        def __init__(self) -> None:
+            super().__init__()
+            self.inflight = 0
+            self.max_inflight = 0
+
+        async def edit_message_text(self, text, chat_id, message_id, parse_mode=None, reply_markup=None):
+            self.inflight += 1
+            self.max_inflight = max(self.max_inflight, self.inflight)
+            await asyncio.sleep(0.01)  # simulate the Telegram round-trip
+            self.inflight -= 1
+            self.edited.append((text, parse_mode, message_id))
+
+    bot = SlowEditBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
+    streamer._buffer = "A" * 3500 + "\n" + "B" * 3500 + "\n" + "C" * 1000
+    await streamer._preview_now()
+    assert len(streamer._block_ids) == 3
+    await streamer.finalize(streamer._buffer + " done")
+    # The in-place upgrades overlap instead of paying one round-trip per block.
+    assert bot.max_inflight >= 2

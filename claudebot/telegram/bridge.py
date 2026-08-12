@@ -245,6 +245,7 @@ class TelegramBridge:
         self.app: Application | None = None
         self._lock_fh = None  # held open for the process lifetime (singleton guard)
         self._last_text: dict[int, str] = {}  # per-chat last prompt, for /retry
+        self._bg_tasks: set[asyncio.Task] = set()  # fire-and-forget refs (GC guard)
 
     # --- wiring -------------------------------------------------------------
 
@@ -608,9 +609,9 @@ class TelegramBridge:
             await self._reply_busy(update)
             self._cleanup_files(image_paths)
             return
-        # Instant "got it" ack — cheaper and quieter than an extra message.
-        with contextlib.suppress(TelegramError):
-            await update.effective_message.set_reaction("👀")
+        # Instant "got it" ack — fired in the background so its Telegram
+        # round-trip doesn't delay the turn start.
+        self._spawn(_ack_reaction(update.effective_message))
         streamer = Streamer(ctx.bot, chat_id, session.settings, live_markup=_STOP_MARKUP)
         try:
             async with _typing(ctx.bot, chat_id):
@@ -636,6 +637,12 @@ class TelegramBridge:
         finally:
             self._cleanup_files(image_paths)
 
+    def _spawn(self, coro) -> None:
+        """Run a fire-and-forget coroutine, holding a reference until it's done."""
+        task = asyncio.create_task(coro)
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
+
     async def _reply_busy(self, update: Update) -> None:
         with contextlib.suppress(TelegramError):
             await update.effective_message.reply_text(
@@ -650,6 +657,11 @@ class TelegramBridge:
 
     async def _on_error(self, update: object, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         log.error("unhandled error: %s", ctx.error, exc_info=ctx.error)
+
+
+async def _ack_reaction(message) -> None:
+    with contextlib.suppress(TelegramError):
+        await message.set_reaction("👀")
 
 
 @contextlib.asynccontextmanager

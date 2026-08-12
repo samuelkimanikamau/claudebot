@@ -218,15 +218,23 @@ class Streamer:
         await self._cancel_preview()
         raw = (text or "").strip() or "(no reply)"
         chunks = chunk_text(raw)  # same _RAW_LIMIT boundary as the streamed blocks
-        for i, chunk in enumerate(chunks):
-            if i < len(self._block_ids):
-                # Upgrade the block the user already watched: plain -> MarkdownV2, in place.
-                await self._send(chunk, edit_id=self._block_ids[i])
-            else:
-                msg_id = await self._send(chunk, edit_id=None)
-                if msg_id is not None:
-                    self._block_ids.append(msg_id)
-                    self._block_last.append(chunk)
+        # Upgrade the blocks the user already watched (plain -> MarkdownV2) in
+        # place, CONCURRENTLY — each edit targets its own message id, so a
+        # multi-block reply settles in one round-trip instead of N. The rate
+        # limiter paces the actual HTTP calls; _send never raises TelegramError.
+        upgrades = [
+            self._send(chunk, edit_id=self._block_ids[i])
+            for i, chunk in enumerate(chunks[: len(self._block_ids)])
+        ]
+        if upgrades:
+            await asyncio.gather(*upgrades, return_exceptions=True)
+        # NEW trailing blocks must be sent one by one, in order — the previous
+        # send's completion determines chat ordering.
+        for chunk in chunks[len(self._block_ids):]:
+            msg_id = await self._send(chunk, edit_id=None)
+            if msg_id is not None:
+                self._block_ids.append(msg_id)
+                self._block_last.append(chunk)
         # Reply ended up SHORTER than what streamed -> delete the leftover bubbles
         # so a stale streamed tail (or a stranded "…") isn't left behind.
         for j in range(len(chunks), len(self._block_ids)):
