@@ -106,10 +106,10 @@ class Streamer:
         # while the turn is live; cleared again on finalize()/error().
         self._live_markup = live_markup
         self._buffer = ""
-        # Live activity line: "💭 …" while Claude reasons, "🔧 Bash 🕑" while
-        # it runs tools — the otherwise-silent phases of a turn. Cleared as
-        # soon as new reply text streams. _status_started marks an ANIMATED
-        # status: the worker keeps ticking to spin the clock.
+        # Live activity line: "💭 …" while Claude reasons, "🕑 Processing…"
+        # while it runs tools — the otherwise-silent phases of a turn. Cleared
+        # as soon as new reply text streams. _status_started marks an ANIMATED
+        # status: the worker keeps ticking to spin the leading clock.
         self._status = ""
         self._status_started: float | None = None
         self._thinking = ""  # current thinking block, for the 💭 tail
@@ -163,9 +163,8 @@ class Streamer:
         if events.is_assistant(event):
             # A tool_use message means a tool phase is starting — often the
             # longest, otherwise-silent part of a turn. Surface it, animated.
-            names = list(dict.fromkeys(events.assistant_tool_names(event)))
-            if names:
-                self._status = "🔧 " + ", ".join(names)[:200]
+            if events.assistant_tool_names(event):
+                self._status = "Processing…"
                 self._status_started = time.monotonic()
                 self._thinking = ""  # a new thinking block may follow the tools
                 self._schedule_preview()
@@ -176,12 +175,12 @@ class Streamer:
         self._thinking = ""
 
     def _render_status(self) -> str:
-        """The status line as shown NOW — animated ones get a ticking clock."""
+        """The status line as shown NOW — animated ones lead with a ticking clock."""
         if not self._status or self._status_started is None:
             return self._status
         elapsed = time.monotonic() - self._status_started
         frame = _SPINNER[int(elapsed / _SPIN_TICK) % len(_SPINNER)]
-        return f"{self._status} {frame}"
+        return f"{frame} {self._status}"
 
     def _schedule_preview(self) -> None:
         """Kick a background preview edit without blocking Claude stdout reads."""
