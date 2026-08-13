@@ -106,10 +106,10 @@ class Streamer:
         # while the turn is live; cleared again on finalize()/error().
         self._live_markup = live_markup
         self._buffer = ""
-        # Live activity line: "💭 …" while Claude reasons, "🔧 Bash 🕑 14s"
-        # while it runs tools — the otherwise-silent phases of a turn. Cleared
-        # as soon as new reply text streams. _status_started marks an ANIMATED
-        # status: the worker keeps ticking to spin the clock + elapsed counter.
+        # Live activity line: "💭 …" while Claude reasons, "🔧 Bash 🕑" while
+        # it runs tools — the otherwise-silent phases of a turn. Cleared as
+        # soon as new reply text streams. _status_started marks an ANIMATED
+        # status: the worker keeps ticking to spin the clock.
         self._status = ""
         self._status_started: float | None = None
         self._thinking = ""  # current thinking block, for the 💭 tail
@@ -176,14 +176,12 @@ class Streamer:
         self._thinking = ""
 
     def _render_status(self) -> str:
-        """The status line as shown NOW — animated ones get a clock + elapsed."""
+        """The status line as shown NOW — animated ones get a ticking clock."""
         if not self._status or self._status_started is None:
             return self._status
         elapsed = time.monotonic() - self._status_started
         frame = _SPINNER[int(elapsed / _SPIN_TICK) % len(_SPINNER)]
-        secs = int(elapsed)
-        took = f"{secs // 60}m{secs % 60:02d}s" if secs >= 60 else f"{secs}s"
-        return f"{self._status} {frame} {took}"
+        return f"{self._status} {frame}"
 
     def _schedule_preview(self) -> None:
         """Kick a background preview edit without blocking Claude stdout reads."""

@@ -303,7 +303,7 @@ def test_thinking_tail_compacts_and_truncates():
     assert len(tail) <= 161
 
 
-def test_render_status_appends_spinner_frame_and_elapsed():
+def test_render_status_appends_spinner_frame_only():
     import time as _time
 
     from claudebot.telegram.streaming import _SPINNER
@@ -313,8 +313,7 @@ def test_render_status_appends_spinner_frame_and_elapsed():
     streamer._status_started = _time.monotonic() - 75
     rendered = streamer._render_status()
     assert rendered.startswith("🔧 Bash ")
-    assert rendered.endswith(" 1m15s")
-    assert any(frame in rendered for frame in _SPINNER)
+    assert rendered[-1] in _SPINNER  # ends on the clock frame — no elapsed counter
     # Non-animated statuses (💭) render untouched.
     streamer._status_started = None
     assert streamer._render_status() == "🔧 Bash"
