@@ -116,3 +116,14 @@ def test_partial_thinking_extracts_thinking_delta():
     )
     assert events.partial_thinking(t) is None
     assert events.partial_text(e) is None
+
+
+def test_compact_boundary_detection_and_trigger():
+    e = parse_line(
+        '{"type":"system","subtype":"compact_boundary",'
+        '"compact_metadata":{"trigger":"auto","pre_tokens":1000384}}'
+    )
+    assert events.is_compact_boundary(e)
+    assert events.compact_trigger(e) == "auto"
+    init = parse_line('{"type":"system","subtype":"init","session_id":"x"}')
+    assert not events.is_compact_boundary(init)

@@ -70,6 +70,22 @@ def is_result(e: ClaudeEvent) -> bool:
     return e.type == "result"
 
 
+def is_compact_boundary(e: ClaudeEvent) -> bool:
+    """The conversation was compacted (context squashed into a summary)::
+
+        {"type":"system","subtype":"compact_boundary",
+         "compact_metadata":{"trigger":"auto","pre_tokens":1000384}}
+    """
+    return e.type == "system" and e.subtype == "compact_boundary"
+
+
+def compact_trigger(e: ClaudeEvent) -> str:
+    meta = e.raw.get("compact_metadata")
+    if isinstance(meta, dict):
+        return str(meta.get("trigger", "auto"))
+    return "auto"
+
+
 # --- field extractors -------------------------------------------------------
 
 def assistant_text(e: ClaudeEvent) -> str:

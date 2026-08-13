@@ -332,3 +332,21 @@ async def test_tool_spinner_keeps_ticking_without_new_events(monkeypatch):
     updates = [t for t, _m, _mid in bot.sent + bot.edited if t.startswith("🔧 Bash")]
     assert len(updates) >= 3  # kept editing with no new events
     assert len(set(updates)) >= 2  # the frame actually advanced
+
+
+async def test_compact_boundary_sets_flag_and_status():
+    bot = RecordBot()
+    streamer = Streamer(bot, 1, _settings(edit_interval=0, markdown=False))
+    event = parse_line(
+        '{"type":"system","subtype":"compact_boundary",'
+        '"compact_metadata":{"trigger":"auto","pre_tokens":1000000}}'
+    )
+    await streamer.on_event(event)
+    await asyncio.sleep(0.05)
+    assert streamer.saw_compaction
+    assert any(text == "♻️ conversation compacted" for text, _m, _mid in bot.sent)
+    # Reply text replaces the marker; the flag survives for the bridge notice.
+    await streamer.on_event(_partial("done"))
+    await asyncio.sleep(0.05)
+    assert streamer._status == ""
+    assert streamer.saw_compaction

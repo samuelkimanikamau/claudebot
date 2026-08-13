@@ -150,3 +150,18 @@ def test_settings_treat_off_spellings_as_disabled():
 def test_format_config_reports_remote_control():
     assert "remote control: auto" in _format_config(_settings())
     assert "remote control: off" in _format_config(_settings(remote_control=None))
+
+
+def test_format_context_health_lines():
+    from claudebot.claude.transcript import TranscriptStats
+    from claudebot.telegram.bridge import _format_context_health
+    from pathlib import Path
+
+    assert "fresh" in _format_context_health(None)
+    small = TranscriptStats(Path("/x"), 50 * 1024, 0, None)
+    assert "50 KB, 0 compaction(s)" in _format_context_health(small)
+    big = TranscriptStats(Path("/x"), 136 * 1024 * 1024, 13, "2026-08-13T07:30:00.000Z")
+    text = _format_context_health(big)
+    assert "136.0 MB, 13 compaction(s)" in text
+    assert "(last 2026-08-13 07:30)" in text
+    assert "/new starts fresh" in text

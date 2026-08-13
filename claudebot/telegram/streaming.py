@@ -113,6 +113,9 @@ class Streamer:
         self._status = ""
         self._status_started: float | None = None
         self._thinking = ""  # current thinking block, for the 💭 tail
+        # True once this turn crossed a compact boundary (context squashed into
+        # a summary) — the bridge follows up with a durable notice after the turn.
+        self.saw_compaction = False
         # One Telegram message per streamed block; _block_last[i] is the plain text
         # last shown in block i (to skip 'not modified' edits).
         self._block_ids: list[int] = []
@@ -149,6 +152,14 @@ class Streamer:
                 self._buffer += txt
                 self._clear_status()
                 self._schedule_preview()  # background worker respects edit_interval
+        if events.is_compact_boundary(event):
+            self.saw_compaction = True
+            # The boundary arrives AFTER the compaction ran, so no spinner —
+            # just a marker until the next text/tool activity replaces it.
+            self._status = "♻️ conversation compacted"
+            self._status_started = None
+            self._thinking = ""
+            self._schedule_preview()
         if events.is_assistant(event):
             # A tool_use message means a tool phase is starting — often the
             # longest, otherwise-silent part of a turn. Surface it, animated.

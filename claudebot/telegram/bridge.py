@@ -30,6 +30,7 @@ from telegram.ext import (
 from claudebot import version_string
 from claudebot.claude.manager import SessionManager
 from claudebot.claude.session import SessionBusy
+from claudebot.claude.transcript import TranscriptStats, transcript_stats
 from claudebot.core.config import PERMISSION_MODES, Settings
 from claudebot.core.logging import get_logger
 from claudebot.core.paths import ensure_state_dir, state_dir
@@ -138,6 +139,20 @@ def _format_config(settings: Settings) -> str:
         f"• idle timeout: {settings.idle_timeout}s\n"
         f"• turn timeout: {settings.turn_timeout}s"
     )
+
+
+def _format_context_health(stats: TranscriptStats | None) -> str:
+    """The /status line describing how much history this conversation carries."""
+    if stats is None:
+        return "• context: fresh (no transcript yet)"
+    mb = stats.size_bytes / (1024 * 1024)
+    size = f"{mb:.1f} MB" if mb >= 0.1 else f"{stats.size_bytes / 1024:.0f} KB"
+    line = f"• context: transcript {size}, {stats.compactions} compaction(s)"
+    if stats.last_compact_at:
+        line += f" (last {stats.last_compact_at[:16].replace('T', ' ')})"
+    if stats.compactions:
+        line += "\n  ⚠️ older details are summarized — /new starts fresh"
+    return line
 
 
 def _format_tools(settings: Settings) -> str:
@@ -386,6 +401,11 @@ class TelegramBridge:
         session = await self.manager.get(update.effective_chat.id)
         s = session.settings
         alive = "running" if session.is_alive else "idle (resumes on next message)"
+        # The transcript scan reads a file that can be >100 MB on a very long
+        # conversation — keep it off the event loop.
+        stats = await asyncio.to_thread(
+            transcript_stats, session.working_dir, session.session_id
+        )
         await update.effective_message.reply_text(
             "claudebot status\n"
             f"• version: {version_string()}\n"
@@ -395,7 +415,8 @@ class TelegramBridge:
             f"• model: {s.model or 'default'}\n"
             f"• effort: {s.effort or 'default'}\n"
             f"• permission mode: {s.permission_mode}\n"
-            f"• turn timeout: {s.turn_timeout}s"
+            f"• turn timeout: {s.turn_timeout}s\n"
+            f"{_format_context_health(stats)}"
         )
 
     async def _cmd_config(self, update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -660,6 +681,15 @@ class TelegramBridge:
                     await streamer.error("⚠️ Error talking to Claude — check the logs.")
                     return
             await streamer.finalize(result.text)
+            if streamer.saw_compaction:
+                with contextlib.suppress(TelegramError):
+                    await ctx.bot.send_message(
+                        chat_id,
+                        "♻️ This conversation outgrew the context window and was "
+                        "auto-compacted — older details are now summarized and some "
+                        "may be lost. /new starts fresh (ask me to save anything "
+                        "important to a memory file first).",
+                    )
             if result.is_error:
                 with contextlib.suppress(TelegramError):
                     await ctx.bot.send_message(chat_id, "⚠️ Claude reported an error for that turn.")
